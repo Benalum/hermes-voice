@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hermes-voice",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "uvicorn", "hermes_voice.server.app:create_app", "--factory", "--host", "127.0.0.1", "--port", "8990"],
+      "port": 8990
+    }
+  ]
+}

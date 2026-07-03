@@ -1,0 +1,22 @@
+# Copy to ~/.hermes-voice/config.toml and fill in. chmod 600 the file.
+
+# Shared secret the browser client must present (stored in its localStorage).
+token = "change-me"
+
+[telegram]
+# Get these at https://my.telegram.org/apps (log in with your own account).
+api_id = 0
+api_hash = ""
+session_path = "~/.hermes-voice/hermes.session"
+
+# One [chats.<key>] block per Hermes agent chat. Only chats listed here can be
+# voice-targeted - it is impossible to send voice transcripts anywhere else.
+[chats.hermes]
+peer = "@your_hermes_bot"     # @username, phone contact name, or numeric chat id
+label = "Hermes"
+max_wait_s = 180              # how long to wait for a reply before the spoken notice
+
+# [chats.ops]
+# peer = -1001234567890       # numeric id works for groups/channels
+# label = "Ops Agent"
+# max_wait_s = 300

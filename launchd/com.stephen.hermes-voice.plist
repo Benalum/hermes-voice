@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.stephen.hermes-voice</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/stephen/.local/bin/uv</string>
+        <string>run</string>
+        <string>--project</string>
+        <string>/Users/stephen/GitHub/hermes-voice</string>
+        <string>uvicorn</string>
+        <string>hermes_voice.server.app:create_app</string>
+        <string>--factory</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>8990</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/stephen/GitHub/hermes-voice</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HV_MODE</key>
+        <string>telegram</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>15</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/stephen/Library/Logs/hermes-voice/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/stephen/Library/Logs/hermes-voice/stderr.log</string>
+</dict>
+</plist>
