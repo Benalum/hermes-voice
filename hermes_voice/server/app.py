@@ -46,11 +46,9 @@ MakeResponder = Callable[[Callable[[sm.Event], None]], ResponderPort]
 
 
 def _build_speech_ports() -> tuple[VadPort, SttPort, TtsPort]:
-    from hermes_voice.io.stt_parakeet import ParakeetStt
-    from hermes_voice.io.tts_kokoro import KokoroTts
-    from hermes_voice.io.vad_silero import SileroVad
+    from hermes_voice.io.speech_factory import build_speech_ports
 
-    return SileroVad(), ParakeetStt(), KokoroTts()
+    return build_speech_ports()
 
 
 async def _connect_telegram(config: Config) -> Any:

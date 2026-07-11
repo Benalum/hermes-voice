@@ -11,9 +11,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-speech = [
+speech-macos = [
     "parakeet-mlx>=0.3",
     "mlx-audio>=0.2",
+    "silero-vad>=5.1",
+    "onnxruntime>=1.20",
+    "numba>=0.60",
+    "misaki[en]>=0.7",
+]
+
+speech-ubuntu = [
+    "faster-whisper>=1.2",
+    "kokoro>=0.9",
+    "soundfile>=0.13",
     "silero-vad>=5.1",
     "onnxruntime>=1.20",
     "numba>=0.60",
