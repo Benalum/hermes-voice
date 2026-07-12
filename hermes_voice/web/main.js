@@ -4,6 +4,7 @@ const els = {
   topic: document.getElementById("topic"),
   refreshTopics: document.getElementById("refresh-topics"),
   topicStatus: document.getElementById("topic-status"),
+  immersion: document.getElementById("immersion"),
   start: document.getElementById("start"),
   mute: document.getElementById("mute"),
   stopSpeaking: document.getElementById("stop-speaking"),
@@ -25,6 +26,10 @@ let requestedTopicId = null;
 let topicReady = false;
 let topicSearchTimer = null;
 let topicMode = false;
+let availableTopics = [];
+let transcriptEntries = [];
+let transcriptSequence = 0;
+let immersionMode = false;
 
 const setState = (name) => {
   els.state.textContent = name;
@@ -35,15 +40,56 @@ const setTopicStatus = (text) => {
   els.topicStatus.textContent = text;
 };
 
-const addLine = (role, text) => {
-  const div = document.createElement("div");
-  div.className = `line ${role}`;
-  div.textContent = text;
-  els.transcript.appendChild(div);
+const transcriptSpeakerRuns = () => {
+  const runs = [];
+  for (const entry of transcriptEntries) {
+    if (entry.role !== "user" && entry.role !== "agent") continue;
+    const currentRun = runs.at(-1);
+    if (currentRun?.role === entry.role) {
+      currentRun.entries.push(entry);
+    } else {
+      runs.push({ role: entry.role, entries: [entry] });
+    }
+  }
+  return runs;
+};
+
+const visibleTranscriptEntries = () => {
+  if (!immersionMode) return transcriptEntries;
+  return transcriptSpeakerRuns()
+    .slice(-2)
+    .flatMap((run) => run.entries);
+};
+
+const renderTranscript = () => {
+  const lines = visibleTranscriptEntries().map((entry) => {
+    const div = document.createElement("div");
+    div.className = `line ${entry.role}`;
+    div.textContent = entry.text;
+    return div;
+  });
+  els.transcript.replaceChildren(...lines);
   els.transcript.scrollTop = els.transcript.scrollHeight;
 };
 
+const addLine = (role, text) => {
+  const normalized = String(text ?? "").trim();
+  if (!normalized) return;
+  transcriptEntries.push({ role, text: normalized, sequence: transcriptSequence++ });
+  renderTranscript();
+};
+
+const replaceTranscript = (entries) => {
+  transcriptEntries = entries.map((entry) => ({
+    role: entry.role,
+    text: entry.text,
+    sequence: transcriptSequence++,
+  }));
+  renderTranscript();
+};
+
 const clearTranscript = () => {
+  transcriptEntries = [];
   els.transcript.replaceChildren();
 };
 
@@ -59,6 +105,7 @@ const resetTopicUi = (status = "not connected") => {
   selectedTopicId = null;
   requestedTopicId = null;
   topicReady = false;
+  availableTopics = [];
   els.topicSearch.disabled = true;
   els.topic.disabled = true;
   els.refreshTopics.disabled = true;
@@ -66,11 +113,28 @@ const resetTopicUi = (status = "not connected") => {
   setTopicStatus(status);
 };
 
-const requestTopics = (query = els.topicSearch.value.trim()) => {
+const requestTopics = () => {
   topicReady = false;
   els.topic.disabled = true;
-  setTopicStatus(query ? "searching topics…" : "loading topics…");
-  sendControl({ type: "list_topics", query, limit: 100 });
+  setTopicStatus("loading topics…");
+  sendControl({ type: "list_topics", query: "", limit: 100 });
+};
+
+const matchingTopics = () => {
+  const words = els.topicSearch.value
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return availableTopics;
+  return availableTopics.filter((topic) => {
+    const title = String(topic.title ?? "").toLocaleLowerCase();
+    return words.every((word) => title.includes(word));
+  });
+};
+
+const applyTopicSearch = () => {
+  populateTopics(matchingTopics());
 };
 
 const selectTopic = (topicId) => {
@@ -85,13 +149,13 @@ const selectTopic = (topicId) => {
 };
 
 const renderHistory = (messages) => {
-  clearTranscript();
-  for (const message of messages) {
+  const entries = messages.flatMap((message) => {
     const role = message.role === "user" ? "user" : "agent";
     const attachment = message.has_attachment ? "📎 Attachment" : "";
     const text = [message.text?.trim(), attachment].filter(Boolean).join("\n");
-    if (text) addLine(role, text);
-  }
+    return text ? [{ role, text }] : [];
+  });
+  replaceTranscript(entries);
 };
 
 const populateTopics = (topics) => {
@@ -107,9 +171,11 @@ const populateTopics = (topics) => {
   if (options.length === 0) {
     els.topic.replaceChildren(new Option("No matching topics", ""));
     els.topic.disabled = true;
-    selectedTopicId = null;
-    requestedTopicId = null;
-    topicReady = false;
+    if (!els.topicSearch.value.trim()) {
+      selectedTopicId = null;
+      requestedTopicId = null;
+      topicReady = false;
+    }
     setTopicStatus("no matching topics");
     return;
   }
@@ -231,7 +297,8 @@ function handleControl(msg) {
       break;
     }
     case "topics":
-      populateTopics(Array.isArray(msg.topics) ? msg.topics : []);
+      availableTopics = Array.isArray(msg.topics) ? msg.topics : [];
+      applyTopicSearch();
       break;
     case "topic_selected":
       if (msg.topic_id === requestedTopicId) {
@@ -404,7 +471,11 @@ els.refreshTopics.onclick = () => {
 };
 els.topicSearch.oninput = () => {
   clearTimeout(topicSearchTimer);
-  topicSearchTimer = setTimeout(() => requestTopics(), 250);
+  topicSearchTimer = setTimeout(() => applyTopicSearch(), 100);
+};
+els.immersion.onchange = () => {
+  immersionMode = els.immersion.checked;
+  renderTranscript();
 };
 window.addEventListener("beforeunload", () => {
   ws?.close();
