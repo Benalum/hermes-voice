@@ -128,7 +128,19 @@ tail -f "$HOME/.hermes/logs/gateway.log"
 
 ### Enable Telegram topics
 
-In BotFather, enable **Threaded Mode** for the Hermes bot. Allow the user to create/manage topics unless the deployment intentionally forbids it.
+In Telegram, use this BotFather path:
+
+```text
+@BotFather
+→ select the Hermes bot
+→ Bot Settings
+→ Thread Settings
+→ enable Threaded Mode
+```
+
+Allow the user to create and manage topics unless intentionally restricted. Telegram may change the exact menu wording; the required result is private-chat topic/thread mode for the bot.
+
+The BotFather token belongs to Hermes Agent and is entered during `hermes gateway setup`. Do **not** put it in `~/.hermes-voice/config.toml`.
 
 Open the private bot chat, create at least one topic, send a test message, and confirm Hermes replies in the same topic.
 
@@ -141,6 +153,22 @@ https://my.telegram.org/apps
 ```
 
 Record the numeric `api_id` and `api_hash`. These are separate from the BotFather bot token.
+
+The values are used as follows:
+
+```text
+BotFather bot token
+→ hermes gateway setup
+
+Telegram api_id and api_hash
+→ ~/.hermes-voice/config.toml under [telegram]
+
+Hermes bot username
+→ ~/.hermes-voice/config.toml as chats.hermes.peer
+
+Hermes Voice browser/gateway token
+→ ~/.hermes-voice/config.toml as the top-level token
+```
 
 ## 6. Clone and install Hermes Voice
 
@@ -222,6 +250,31 @@ Protect the config:
 ```bash
 chmod 600 "$HOME/.hermes-voice/config.toml"
 ```
+
+### Find the gateway token later
+
+The browser prompt labeled **Gateway token** uses the top-level `token` from this file. It is not the BotFather bot token and it is not the old Hermes RPC session token.
+
+Display it when connecting a new phone or browser:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+import tomllib
+
+path = Path.home() / ".hermes-voice" / "config.toml"
+with path.open("rb") as handle:
+    config = tomllib.load(handle)
+
+token = config.get("token")
+if not token:
+    raise SystemExit(f"No top-level token found in {path}")
+
+print(token)
+PY
+```
+
+Keep the printed value private.
 
 ## 8. Authorize the Telegram user session
 
@@ -384,6 +437,48 @@ tail -f "$HOME/.hermes-voice/logs/server-error.log"
 
 This launchd section is especially likely to need refinement. macOS launchd uses static paths and a restricted environment. Recreate or edit the plist if the repository, Python environment, or username changes.
 
+## 12. Use from a phone or another device with Tailscale
+
+Keep Uvicorn bound to `127.0.0.1`. Install the Tailscale app on the Mac and on the phone, tablet, or second computer, then join both devices to the same tailnet.
+
+Confirm the local service and Tailscale connection:
+
+```bash
+curl -sS http://127.0.0.1:8990/healthz
+tailscale status
+```
+
+Publish Hermes Voice privately:
+
+```bash
+tailscale serve --bg 8990
+tailscale serve status
+```
+
+If the CLI reports a permissions error, retry with `sudo`. If `tailscale` is not in the shell path, install or update the Tailscale app and enable its command-line integration.
+
+Tailscale prints a private HTTPS address similar to:
+
+```text
+https://hermes.example-tailnet.ts.net
+```
+
+On the other device:
+
+1. Turn on Tailscale.
+2. Open the printed HTTPS address.
+3. Enter the Hermes Voice gateway token from the top-level `token` in `~/.hermes-voice/config.toml`.
+4. Grant microphone permission.
+5. Select a Telegram topic and press **Start**.
+
+HTTPS is important for browser microphone permission and secure WebSockets. Use **Tailscale Serve**, not **Tailscale Funnel**, unless public Internet exposure is intentionally desired.
+
+Remove the private Serve mapping with:
+
+```bash
+tailscale serve reset
+```
+
 ## Troubleshooting
 
 ### WebSocket connection failed
@@ -395,6 +490,16 @@ curl -sS -o /dev/null -w 'HTTP %{http_code}\n' \
 launchctl print "gui/$(id -u)/com.hermes.voice"
 tail -n 200 "$HOME/.hermes-voice/logs/server-error.log"
 ```
+
+### Tailscale URL does not open
+
+```bash
+tailscale status
+tailscale serve status
+curl -sS http://127.0.0.1:8990/healthz
+```
+
+Confirm the client device is connected to the same tailnet. Re-run `tailscale serve --bg 8990` if the mapping is absent.
 
 ### Port 8990 is occupied
 
