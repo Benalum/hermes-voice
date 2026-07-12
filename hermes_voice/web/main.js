@@ -1,5 +1,9 @@
 const els = {
   chat: document.getElementById("chat"),
+  topicSearch: document.getElementById("topic-search"),
+  topic: document.getElementById("topic"),
+  refreshTopics: document.getElementById("refresh-topics"),
+  topicStatus: document.getElementById("topic-status"),
   start: document.getElementById("start"),
   mute: document.getElementById("mute"),
   stopSpeaking: document.getElementById("stop-speaking"),
@@ -16,10 +20,19 @@ let playerReady = Promise.resolve();
 let micCtx = null;
 let micNode = null;
 let micStream = null;
+let selectedTopicId = null;
+let requestedTopicId = null;
+let topicReady = false;
+let topicSearchTimer = null;
+let topicMode = false;
 
 const setState = (name) => {
   els.state.textContent = name;
   els.state.dataset.state = name.startsWith("waiting") ? "waiting" : name;
+};
+
+const setTopicStatus = (text) => {
+  els.topicStatus.textContent = text;
 };
 
 const addLine = (role, text) => {
@@ -28,6 +41,118 @@ const addLine = (role, text) => {
   div.textContent = text;
   els.transcript.appendChild(div);
   els.transcript.scrollTop = els.transcript.scrollHeight;
+};
+
+const clearTranscript = () => {
+  els.transcript.replaceChildren();
+};
+
+const sendControl = (body) => {
+  if (ws?.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify(body));
+  return true;
+};
+
+const resetTopicUi = (status = "not connected") => {
+  clearTimeout(topicSearchTimer);
+  topicSearchTimer = null;
+  selectedTopicId = null;
+  requestedTopicId = null;
+  topicReady = false;
+  els.topicSearch.disabled = true;
+  els.topic.disabled = true;
+  els.refreshTopics.disabled = true;
+  els.topic.replaceChildren(new Option("No topic selected", ""));
+  setTopicStatus(status);
+};
+
+const requestTopics = (query = els.topicSearch.value.trim()) => {
+  topicReady = false;
+  els.topic.disabled = true;
+  setTopicStatus(query ? "searching topics…" : "loading topics…");
+  sendControl({ type: "list_topics", query, limit: 100 });
+};
+
+const selectTopic = (topicId) => {
+  if (!Number.isInteger(topicId) || topicId <= 0) return;
+  requestedTopicId = topicId;
+  selectedTopicId = null;
+  topicReady = false;
+  clearTranscript();
+  els.topic.disabled = true;
+  setTopicStatus("loading topic history…");
+  sendControl({ type: "select_topic", topic_id: topicId, history_limit: 100 });
+};
+
+const renderHistory = (messages) => {
+  clearTranscript();
+  for (const message of messages) {
+    const role = message.role === "user" ? "user" : "agent";
+    const attachment = message.has_attachment ? "📎 Attachment" : "";
+    const text = [message.text?.trim(), attachment].filter(Boolean).join("\n");
+    if (text) addLine(role, text);
+  }
+};
+
+const populateTopics = (topics) => {
+  const previousTopicId = selectedTopicId ?? requestedTopicId;
+  const options = topics.map((topic) => {
+    const option = document.createElement("option");
+    option.value = String(topic.topic_id);
+    option.textContent = topic.pinned ? `📌 ${topic.title}` : topic.title;
+    option.disabled = Boolean(topic.closed);
+    return option;
+  });
+
+  if (options.length === 0) {
+    els.topic.replaceChildren(new Option("No matching topics", ""));
+    els.topic.disabled = true;
+    selectedTopicId = null;
+    requestedTopicId = null;
+    topicReady = false;
+    setTopicStatus("no matching topics");
+    return;
+  }
+
+  const previousOption = options.find(
+    (option) => Number(option.value) === previousTopicId && !option.disabled,
+  );
+  if (previousOption) {
+    els.topic.replaceChildren(...options);
+    els.topic.disabled = false;
+    previousOption.selected = true;
+    if (selectedTopicId === previousTopicId) {
+      topicReady = true;
+      setTopicStatus("topic ready");
+    } else {
+      setTopicStatus("loading topic history…");
+    }
+    return;
+  }
+
+  if (previousTopicId !== null) {
+    const placeholder = new Option("Choose a topic…", "", true, true);
+    placeholder.disabled = true;
+    els.topic.replaceChildren(placeholder, ...options);
+    els.topic.disabled = false;
+    topicReady = false;
+    setTopicStatus(`${options.length} matching topics`);
+    return;
+  }
+
+  els.topic.replaceChildren(...options);
+  els.topic.disabled = false;
+  const firstAvailable = options.find((option) => !option.disabled);
+  if (!firstAvailable) {
+    selectedTopicId = null;
+    requestedTopicId = null;
+    topicReady = false;
+    setTopicStatus("all matching topics are closed");
+    return;
+  }
+
+  firstAvailable.selected = true;
+  selectTopic(Number(firstAvailable.value));
 };
 
 async function ensurePlayer(sampleRate) {
@@ -67,7 +192,12 @@ async function startMic() {
   micNode = new AudioWorkletNode(micCtx, "mic-processor");
   source.connect(micNode);
   micNode.port.onmessage = (event) => {
-    if (!muted && ws?.readyState === WebSocket.OPEN && event.data.byteLength > 0) {
+    if (
+      (!topicMode || topicReady)
+      && !muted
+      && ws?.readyState === WebSocket.OPEN
+      && event.data.byteLength > 0
+    ) {
       ws.send(event.data);
     }
   };
@@ -86,17 +216,46 @@ function handleControl(msg) {
       });
       els.chat.replaceChildren(...options);
       els.chat.disabled = options.length === 0;
+      topicMode = options.length > 0;
       setState("listening");
+
+      if (topicMode) {
+        els.topicSearch.value = "";
+        els.topicSearch.disabled = false;
+        els.refreshTopics.disabled = false;
+        clearTranscript();
+        requestTopics();
+      } else {
+        resetTopicUi("topics unavailable in this mode");
+      }
+      break;
+    }
+    case "topics":
+      populateTopics(Array.isArray(msg.topics) ? msg.topics : []);
+      break;
+    case "topic_selected":
+      if (msg.topic_id === requestedTopicId) {
+        setTopicStatus("loading topic history…");
+      }
+      break;
+    case "topic_history": {
+      if (msg.topic_id !== requestedTopicId) break;
+      const messages = Array.isArray(msg.messages) ? msg.messages : [];
+      renderHistory(messages);
+      selectedTopicId = msg.topic_id;
+      topicReady = true;
+      els.topic.disabled = false;
+      setTopicStatus(`${messages.length} messages loaded`);
       break;
     }
     case "state":
       setState(msg.name);
       break;
     case "transcript":
-      if (msg.final) addLine("user", msg.text);
+      if (msg.final && (!topicMode || topicReady)) addLine("user", msg.text);
       break;
     case "agent_text":
-      addLine("agent", msg.text);
+      if (!topicMode || topicReady) addLine("agent", msg.text);
       break;
     case "speak_start":
       currentEpoch = msg.epoch;
@@ -116,6 +275,7 @@ function handleControl(msg) {
         }
         break;
       }
+      setTopicStatus("request failed");
       addLine("agent", `⚠ ${msg.message}`);
       break;
   }
@@ -160,6 +320,8 @@ async function disconnect() {
   muted = false;
   els.mute.textContent = "Mute";
 
+  topicMode = false;
+  resetTopicUi();
   setState("idle");
   els.start.disabled = false;
   els.mute.disabled = true;
@@ -195,6 +357,8 @@ async function connect() {
     ws.onclose = async () => {
       ws = null;
       await stopMic();
+      topicMode = false;
+      resetTopicUi();
       setState("idle");
       els.start.disabled = false;
       els.mute.disabled = true;
@@ -211,9 +375,7 @@ els.start.onclick = () => connect().catch((error) => addLine("agent", `⚠ ${err
 els.mute.onclick = () => {
   muted = !muted;
   els.mute.textContent = muted ? "Unmute" : "Mute";
-  if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "mute", on: muted }));
-  }
+  sendControl({ type: "mute", on: muted });
 };
 /*
 els.stopSpeaking.onclick = () => {
@@ -221,14 +383,28 @@ els.stopSpeaking.onclick = () => {
 };
 */
 els.stopSpeaking.onclick = () => {
-  if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "cancel" }));
-  }
+  sendControl({ type: "cancel" });
 };
 els.chat.onchange = () => {
-  if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "select_chat", chat_key: els.chat.value }));
-  }
+  if (ws?.readyState !== WebSocket.OPEN) return;
+  clearTranscript();
+  resetTopicUi("switching chat…");
+  topicMode = true;
+  els.topicSearch.value = "";
+  els.topicSearch.disabled = false;
+  els.refreshTopics.disabled = false;
+  sendControl({ type: "select_chat", chat_key: els.chat.value });
+  requestTopics();
+};
+els.topic.onchange = () => {
+  selectTopic(Number(els.topic.value));
+};
+els.refreshTopics.onclick = () => {
+  requestTopics();
+};
+els.topicSearch.oninput = () => {
+  clearTimeout(topicSearchTimer);
+  topicSearchTimer = setTimeout(() => requestTopics(), 250);
 };
 window.addEventListener("beforeunload", () => {
   ws?.close();
