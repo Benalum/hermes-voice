@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import struct
 from dataclasses import dataclass
+from typing import cast
 
 _EPOCH_PREFIX = struct.Struct("<I")
 
@@ -29,17 +30,45 @@ class Mute:
 
 
 @dataclass(frozen=True)
+class ListTopics:
+    query: str = ""
+    limit: int = 100
+
+
+@dataclass(frozen=True)
+class SelectTopic:
+    topic_id: int
+    history_limit: int = 50
+
+
+@dataclass(frozen=True)
 class Cancel:
     pass
 
 
-ClientMsg = Hello | SelectChat | Mute | Cancel
+ClientMsg = Hello | SelectChat | ListTopics | SelectTopic | Mute | Cancel
 
 
 @dataclass(frozen=True)
 class Ready:
     chats: tuple[dict[str, str], ...]
     active_chat: str | None
+
+
+@dataclass(frozen=True)
+class Topics:
+    items: tuple[dict[str, object], ...]
+
+
+@dataclass(frozen=True)
+class TopicSelected:
+    topic_id: int | None
+
+
+@dataclass(frozen=True)
+class TopicHistory:
+    topic_id: int
+    messages: tuple[dict[str, object], ...]
 
 
 @dataclass(frozen=True)
@@ -76,13 +105,47 @@ class ErrorMsg:
     message: str
 
 
-ServerMsg = Ready | StateMsg | Transcript | AgentText | SpeakStart | SpeakStop | ErrorMsg
+ServerMsg = (
+    Ready
+    | Topics
+    | TopicSelected
+    | TopicHistory
+    | StateMsg
+    | Transcript
+    | AgentText
+    | SpeakStart
+    | SpeakStop
+    | ErrorMsg
+)
 
 
 def _require(obj: dict[str, object], field: str, kind: type) -> object:
     value = obj.get(field)
     if not isinstance(value, kind) or (kind is not bool and isinstance(value, bool)):
         raise ProtocolError(f"field {field!r} must be {kind.__name__}")
+    return value
+
+
+def _optional_int(
+    obj: dict[str, object],
+    field: str,
+    *,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int:
+    value = obj.get(field, default)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ProtocolError(f"field {field!r} must be int")
+    if not minimum <= value <= maximum:
+        raise ProtocolError(f"field {field!r} must be between {minimum} and {maximum}")
+    return value
+
+
+def _optional_str(obj: dict[str, object], field: str, *, default: str = "") -> str:
+    value = obj.get(field, default)
+    if not isinstance(value, str):
+        raise ProtocolError(f"field {field!r} must be str")
     return value
 
 
@@ -98,6 +161,31 @@ def decode_client_text(raw: str) -> ClientMsg:
             return Hello(token=str(_require(obj, "token", str)))
         case "select_chat":
             return SelectChat(chat_key=str(_require(obj, "chat_key", str)))
+        case "list_topics":
+            return ListTopics(
+                query=_optional_str(obj, "query").strip(),
+                limit=_optional_int(
+                    obj,
+                    "limit",
+                    default=100,
+                    minimum=1,
+                    maximum=100,
+                ),
+            )
+        case "select_topic":
+            topic_id = cast(int, _require(obj, "topic_id", int))
+            if topic_id <= 0:
+                raise ProtocolError("field 'topic_id' must be a positive integer")
+            return SelectTopic(
+                topic_id=topic_id,
+                history_limit=_optional_int(
+                    obj,
+                    "history_limit",
+                    default=50,
+                    minimum=1,
+                    maximum=100,
+                ),
+            )
         case "mute":
             return Mute(on=bool(_require(obj, "on", bool)))
         case "cancel":
@@ -111,6 +199,16 @@ def encode_server_msg(msg: ServerMsg) -> str:
     match msg:
         case Ready(chats=chats, active_chat=active_chat):
             body = {"type": "ready", "chats": list(chats), "active_chat": active_chat}
+        case Topics(items=items):
+            body = {"type": "topics", "topics": list(items)}
+        case TopicSelected(topic_id=topic_id):
+            body = {"type": "topic_selected", "topic_id": topic_id}
+        case TopicHistory(topic_id=topic_id, messages=messages):
+            body = {
+                "type": "topic_history",
+                "topic_id": topic_id,
+                "messages": list(messages),
+            }
         case StateMsg(name=name):
             body = {"type": "state", "name": name}
         case Transcript(role=role, text=text, final=final):

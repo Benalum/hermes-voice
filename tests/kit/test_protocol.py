@@ -5,13 +5,18 @@ from hermes_voice.kit.protocol import (
     Cancel,
     ErrorMsg,
     Hello,
+    ListTopics,
     Mute,
     ProtocolError,
     Ready,
     SelectChat,
+    SelectTopic,
     SpeakStart,
     SpeakStop,
     StateMsg,
+    TopicHistory,
+    Topics,
+    TopicSelected,
     Transcript,
     decode_audio_frame,
     decode_client_text,
@@ -28,6 +33,28 @@ class TestClientMessages:
     def test_decodes_select_chat(self) -> None:
         msg = decode_client_text('{"type": "select_chat", "chat_key": "research"}')
         assert msg == SelectChat(chat_key="research")
+
+    def test_decodes_list_topics_with_defaults_and_search(self) -> None:
+        assert decode_client_text('{"type": "list_topics"}') == ListTopics()
+        assert decode_client_text(
+            '{"type": "list_topics", "query": "  system  ", "limit": 20}'
+        ) == ListTopics(query="system", limit=20)
+
+    def test_decodes_select_topic_with_history_limit(self) -> None:
+        assert decode_client_text('{"type": "select_topic", "topic_id": 98}') == SelectTopic(
+            topic_id=98
+        )
+        assert decode_client_text(
+            '{"type": "select_topic", "topic_id": 98, "history_limit": 25}'
+        ) == SelectTopic(topic_id=98, history_limit=25)
+
+    def test_rejects_invalid_topic_request_values(self) -> None:
+        with pytest.raises(ProtocolError):
+            decode_client_text('{"type": "list_topics", "limit": 0}')
+        with pytest.raises(ProtocolError):
+            decode_client_text('{"type": "select_topic", "topic_id": 0}')
+        with pytest.raises(ProtocolError):
+            decode_client_text('{"type": "select_topic", "topic_id": 98, "history_limit": 101}')
 
     def test_decodes_mute_on_and_off(self) -> None:
         assert decode_client_text('{"type": "mute", "on": true}') == Mute(on=True)
@@ -66,6 +93,47 @@ class TestServerMessages:
         assert encode_server_msg(msg) == (
             '{"type": "ready", "chats": [{"key": "research", "label": "Research"}],'
             ' "active_chat": "research"}'
+        )
+
+    def test_encodes_topics(self) -> None:
+        msg = Topics(
+            items=(
+                {
+                    "topic_id": 98,
+                    "title": "System",
+                    "top_message_id": 110,
+                    "closed": False,
+                    "pinned": False,
+                },
+            )
+        )
+        assert encode_server_msg(msg) == (
+            '{"type": "topics", "topics": [{"topic_id": 98, "title": "System", '
+            '"top_message_id": 110, "closed": false, "pinned": false}]}'
+        )
+
+    def test_encodes_topic_selection_and_history(self) -> None:
+        assert encode_server_msg(TopicSelected(topic_id=98)) == (
+            '{"type": "topic_selected", "topic_id": 98}'
+        )
+        history = TopicHistory(
+            topic_id=98,
+            messages=(
+                {
+                    "message_id": 109,
+                    "topic_id": 98,
+                    "role": "user",
+                    "text": "Hello",
+                    "has_attachment": False,
+                    "date": "2026-07-12T04:00:00+00:00",
+                },
+            ),
+        )
+        assert encode_server_msg(history) == (
+            '{"type": "topic_history", "topic_id": 98, "messages": '
+            '[{"message_id": 109, "topic_id": 98, "role": "user", '
+            '"text": "Hello", "has_attachment": false, '
+            '"date": "2026-07-12T04:00:00+00:00"}]}'
         )
 
     def test_encodes_state(self) -> None:

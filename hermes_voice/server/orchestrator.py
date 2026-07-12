@@ -11,6 +11,7 @@ import logging
 from collections import deque
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 from hermes_voice.kit import session as sm
 from hermes_voice.kit.normalize import normalize_for_speech
@@ -66,7 +67,8 @@ class Orchestrator:
         self._config = config
         self._session = sm.Session(state=sm.State.LISTENING, turn_open=False, chat_key=initial_chat)
         self._turns = TurnManager(config.turn)
-        self._events: asyncio.Queue[sm.Event] = asyncio.Queue()
+        self._events: asyncio.Queue[tuple[sm.Event, asyncio.Future[None] | None]] = asyncio.Queue()
+        self._ready = asyncio.Event()
         self._epoch = 1
         self._speech_texts: deque[str] = deque()
         self._tts_task: asyncio.Task[None] | None = None
@@ -77,7 +79,39 @@ class Orchestrator:
     # --- inputs ---
 
     def emit(self, event: sm.Event) -> None:
-        self._events.put_nowait(event)
+        self._events.put_nowait((event, None))
+
+    async def dispatch(self, event: sm.Event) -> None:
+        """Process a control event and wait for all of its effects to finish."""
+        future = asyncio.get_running_loop().create_future()
+        self._events.put_nowait((event, future))
+        await future
+
+    async def list_topics(self, *, query: str = "", limit: int = 100) -> tuple[Any, ...]:
+        await self._ready.wait()
+        method = getattr(self._responder, "list_topics", None)
+        if not callable(method):
+            raise RuntimeError("the active responder does not support Telegram topics")
+        return tuple(await method(query=query, limit=limit))
+
+    async def select_topic(self, topic_id: int) -> None:
+        await self._ready.wait()
+        method = getattr(self._responder, "select_topic", None)
+        if not callable(method):
+            raise RuntimeError("the active responder does not support Telegram topics")
+        await method(topic_id)
+
+    async def load_topic_history(
+        self,
+        topic_id: int,
+        *,
+        limit: int = 50,
+    ) -> tuple[Any, ...]:
+        await self._ready.wait()
+        method = getattr(self._responder, "load_topic_history", None)
+        if not callable(method):
+            raise RuntimeError("the active responder does not support Telegram topics")
+        return tuple(await method(topic_id, limit=limit))
 
     def feed_audio(self, pcm: bytes) -> None:
         prob = self._vad.probability(pcm)
@@ -95,10 +129,20 @@ class Orchestrator:
 
     async def run(self) -> None:
         await self._responder.reset(self._session.chat_key or "")
+        self._ready.set()
         try:
             while True:
-                event = await self._events.get()
-                await self._handle(event)
+                event, future = await self._events.get()
+                try:
+                    await self._handle(event)
+                except Exception as exc:
+                    if future is None:
+                        raise
+                    if not future.done():
+                        future.set_exception(exc)
+                else:
+                    if future is not None and not future.done():
+                        future.set_result(None)
         finally:
             self._shutdown()
 
@@ -127,7 +171,7 @@ class Orchestrator:
                 await self._stop_speaking()
             case sm.ResetReplies(chat_key=chat_key):
                 self._speech_texts.clear()
-                self._spawn(self._responder.reset(chat_key))
+                await self._responder.reset(chat_key)
 
     # --- effect implementations ---
 

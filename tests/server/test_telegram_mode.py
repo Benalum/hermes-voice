@@ -50,3 +50,45 @@ class TestTelegramMode:
             ws.receive_text()
             ws.send_text('{"type": "select_chat", "chat_key": "ops"}')
             ws.send_text('{"type": "cancel"}')
+
+
+class TestTelegramTopicProtocol:
+    def test_list_topics_returns_telegram_metadata(self) -> None:
+        with make_app() as client, client.websocket_connect("/ws") as ws:
+            ws.send_text('{"type": "hello", "token": ""}')
+            ws.receive_text()
+            ws.send_text('{"type": "list_topics", "query": "system", "limit": 20}')
+            reply = json.loads(ws.receive_text())
+
+        assert reply == {
+            "type": "topics",
+            "topics": [
+                {
+                    "topic_id": 98,
+                    "title": "System",
+                    "top_message_id": 110,
+                    "closed": False,
+                    "pinned": False,
+                }
+            ],
+        }
+
+    def test_select_topic_returns_ack_and_chronological_history(self) -> None:
+        with make_app() as client, client.websocket_connect("/ws") as ws:
+            ws.send_text('{"type": "hello", "token": ""}')
+            ws.receive_text()
+            ws.send_text('{"type": "select_topic", "topic_id": 98, "history_limit": 20}')
+            selected = json.loads(ws.receive_text())
+            history = json.loads(ws.receive_text())
+
+        assert selected == {"type": "topic_selected", "topic_id": 98}
+        assert history["type"] == "topic_history"
+        assert history["topic_id"] == 98
+        assert [message["message_id"] for message in history["messages"]] == [108, 109, 110]
+        assert [message["role"] for message in history["messages"]] == [
+            "agent",
+            "user",
+            "agent",
+        ]
+        assert history["messages"][0]["has_attachment"] is True
+        assert history["messages"][1]["date"] == "2026-07-12T04:00:00+00:00"

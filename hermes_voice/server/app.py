@@ -25,10 +25,15 @@ from hermes_voice.kit.protocol import (
     Cancel,
     ErrorMsg,
     Hello,
+    ListTopics,
     Mute,
     ProtocolError,
     Ready,
     SelectChat,
+    SelectTopic,
+    TopicHistory,
+    Topics,
+    TopicSelected,
     decode_client_text,
     encode_audio_frame,
     encode_server_msg,
@@ -129,17 +134,66 @@ async def _run_voice_session(
             except ProtocolError as exc:
                 await ws.send_text(encode_server_msg(ErrorMsg(message=str(exc))))
                 continue
-            match msg:
-                case SelectChat(chat_key=chat_key):
-                    orchestrator.emit(sm.ChatSelected(chat_key=chat_key))
-                case Cancel():
-                    orchestrator.emit(sm.CancelPressed())
-                case Mute() | Hello():
-                    pass
+            try:
+                match msg:
+                    case SelectChat(chat_key=chat_key):
+                        await orchestrator.dispatch(sm.ChatSelected(chat_key=chat_key))
+                    case ListTopics(query=query, limit=limit):
+                        topics = await orchestrator.list_topics(query=query, limit=limit)
+                        await ws.send_text(
+                            encode_server_msg(
+                                Topics(items=tuple(_topic_payload(topic) for topic in topics))
+                            )
+                        )
+                    case SelectTopic(topic_id=topic_id, history_limit=history_limit):
+                        await orchestrator.select_topic(topic_id)
+                        await ws.send_text(encode_server_msg(TopicSelected(topic_id=topic_id)))
+                        history = await orchestrator.load_topic_history(
+                            topic_id,
+                            limit=history_limit,
+                        )
+                        await ws.send_text(
+                            encode_server_msg(
+                                TopicHistory(
+                                    topic_id=topic_id,
+                                    messages=tuple(
+                                        _topic_message_payload(message) for message in history
+                                    ),
+                                )
+                            )
+                        )
+                    case Cancel():
+                        orchestrator.emit(sm.CancelPressed())
+                    case Mute() | Hello():
+                        pass
+            except (RuntimeError, ValueError) as exc:
+                await ws.send_text(encode_server_msg(ErrorMsg(message=str(exc))))
     finally:
         run_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await run_task
+
+
+def _topic_payload(topic: Any) -> dict[str, object]:
+    return {
+        "topic_id": topic.topic_id,
+        "title": topic.title,
+        "top_message_id": topic.top_message_id,
+        "closed": topic.closed,
+        "pinned": topic.pinned,
+    }
+
+
+def _topic_message_payload(message: Any) -> dict[str, object]:
+    date = message.date.isoformat() if message.date is not None else None
+    return {
+        "message_id": message.message_id,
+        "topic_id": message.topic_id,
+        "role": "user" if message.is_outgoing else "agent",
+        "text": message.text,
+        "has_attachment": message.has_attachment,
+        "date": date,
+    }
 
 
 def create_app(

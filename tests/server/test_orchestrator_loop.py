@@ -1,5 +1,7 @@
 """Full voice loop against the orchestrator with fake speech ports (no models)."""
 
+import asyncio
+import contextlib
 import json
 from typing import Any
 
@@ -114,3 +116,70 @@ class TestParrotLoop:
             controls, _ = collect_until_listening(ws)
         states = [c["name"] for c in controls if c["type"] == "state"]
         assert states == ["transcribing", "waiting", "speaking", "listening"]
+
+
+class TopicResponder:
+    def __init__(self, emit: Any) -> None:
+        self.emit = emit
+        self.reset_calls: list[str] = []
+        self.selected_topic: int | None = None
+
+    async def reset(self, chat_key: str) -> None:
+        self.reset_calls.append(chat_key)
+        self.selected_topic = None
+
+    async def send(self, text: str) -> None:
+        return None
+
+    async def list_topics(self, *, query: str, limit: int) -> tuple[str, ...]:
+        return (f"{query}:{limit}",)
+
+    async def select_topic(self, topic_id: int) -> None:
+        self.selected_topic = topic_id
+
+    async def load_topic_history(self, topic_id: int, *, limit: int) -> tuple[str, ...]:
+        return (f"{topic_id}:{limit}",)
+
+
+class TestOrchestratorTopicControls:
+    async def test_topic_controls_wait_for_initial_reset_and_dispatch_chat_switch(self) -> None:
+        from hermes_voice.kit import session as sm
+        from hermes_voice.server.orchestrator import Orchestrator
+
+        holder: dict[str, TopicResponder] = {}
+
+        def make_responder(emit: Any) -> TopicResponder:
+            responder = TopicResponder(emit)
+            holder["responder"] = responder
+            return responder
+
+        orchestrator = Orchestrator(
+            send_text=_ignore_text,
+            send_bytes=_ignore_bytes,
+            vad=FakeVad(),
+            stt=FakeStt(),
+            tts=FakeTts(),
+            make_responder=make_responder,
+            initial_chat="hermes",
+        )
+        task = asyncio.create_task(orchestrator.run())
+        try:
+            assert await orchestrator.list_topics(query="sys", limit=10) == ("sys:10",)
+            await orchestrator.select_topic(98)
+            assert holder["responder"].selected_topic == 98
+            assert await orchestrator.load_topic_history(98, limit=20) == ("98:20",)
+            await orchestrator.dispatch(sm.ChatSelected(chat_key="ops"))
+            assert holder["responder"].reset_calls == ["hermes", "ops"]
+            assert holder["responder"].selected_topic is None
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+
+async def _ignore_text(_text: str) -> None:
+    return None
+
+
+async def _ignore_bytes(_data: bytes) -> None:
+    return None
