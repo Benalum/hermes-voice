@@ -221,9 +221,9 @@ els.stopSpeaking.onclick = () => {
 };
 */
 els.stopSpeaking.onclick = () => {
-  disconnect().catch((error) => {
-    addLine("agent", `⚠ Failed to stop session: ${error.message}`);
-  });
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "cancel" }));
+  }
 };
 els.chat.onchange = () => {
   if (ws?.readyState === WebSocket.OPEN) {
