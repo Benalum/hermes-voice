@@ -2,9 +2,15 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
-    "python_full_version >= '3.15'",
-    "python_full_version >= '3.13' and python_full_version < '3.15'",
-    "python_full_version < '3.13'",
+    "(python_full_version >= '3.15' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version >= '3.15' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.15' and platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin') or (python_full_version >= '3.15' and sys_platform == 'linux')",
+    "python_full_version >= '3.15' and sys_platform != 'darwin' and sys_platform != 'linux'",
+    "(python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin') or (python_full_version >= '3.13' and python_full_version < '3.15' and sys_platform == 'linux')",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and sys_platform != 'darwin' and sys_platform != 'linux'",
+    "(python_full_version < '3.13' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version < '3.13' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "(python_full_version < '3.13' and platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin') or (python_full_version < '3.13' and sys_platform == 'linux')",
+    "python_full_version < '3.13' and sys_platform != 'darwin' and sys_platform != 'linux'",
 ]
 
 [[package]]
@@ -739,6 +745,17 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+speech = [
+    { name = "faster-whisper", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
+    { name = "kokoro", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
+    { name = "misaki", extra = ["en"], marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "mlx-audio", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
+    { name = "numba", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "onnxruntime", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "parakeet-mlx", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
+    { name = "silero-vad", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "soundfile", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
+]
 speech-macos = [
     { name = "misaki", extra = ["en"] },
     { name = "mlx-audio" },
@@ -747,7 +764,7 @@ speech-macos = [
     { name = "parakeet-mlx" },
     { name = "silero-vad" },
 ]
-speech-ubuntu = [
+speech-portable = [
     { name = "faster-whisper" },
     { name = "kokoro" },
     { name = "misaki", extra = ["en"] },
@@ -771,24 +788,37 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
-    { name = "faster-whisper", marker = "extra == 'speech-ubuntu'", specifier = ">=1.2" },
-    { name = "kokoro", marker = "extra == 'speech-ubuntu'", specifier = ">=0.9" },
+    { name = "faster-whisper", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=1.2" },
+    { name = "faster-whisper", marker = "extra == 'speech-portable'", specifier = ">=1.2" },
+    { name = "kokoro", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=0.9" },
+    { name = "kokoro", marker = "extra == 'speech-portable'", specifier = ">=0.9" },
+    { name = "misaki", extras = ["en"], marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech')", specifier = ">=0.7" },
+    { name = "misaki", extras = ["en"], marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=0.7" },
     { name = "misaki", extras = ["en"], marker = "extra == 'speech-macos'", specifier = ">=0.7" },
-    { name = "misaki", extras = ["en"], marker = "extra == 'speech-ubuntu'", specifier = ">=0.7" },
+    { name = "misaki", extras = ["en"], marker = "extra == 'speech-portable'", specifier = ">=0.7" },
+    { name = "mlx-audio", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech')", specifier = ">=0.2" },
     { name = "mlx-audio", marker = "extra == 'speech-macos'", specifier = ">=0.2" },
+    { name = "numba", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech')", specifier = ">=0.60" },
+    { name = "numba", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=0.60" },
     { name = "numba", marker = "extra == 'speech-macos'", specifier = ">=0.60" },
-    { name = "numba", marker = "extra == 'speech-ubuntu'", specifier = ">=0.60" },
+    { name = "numba", marker = "extra == 'speech-portable'", specifier = ">=0.60" },
     { name = "numpy", specifier = ">=2.0" },
+    { name = "onnxruntime", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech')", specifier = ">=1.20" },
+    { name = "onnxruntime", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=1.20" },
     { name = "onnxruntime", marker = "extra == 'speech-macos'", specifier = ">=1.20" },
-    { name = "onnxruntime", marker = "extra == 'speech-ubuntu'", specifier = ">=1.20" },
+    { name = "onnxruntime", marker = "extra == 'speech-portable'", specifier = ">=1.20" },
+    { name = "parakeet-mlx", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech')", specifier = ">=0.3" },
     { name = "parakeet-mlx", marker = "extra == 'speech-macos'", specifier = ">=0.3" },
+    { name = "silero-vad", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech')", specifier = ">=5.1" },
+    { name = "silero-vad", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=5.1" },
     { name = "silero-vad", marker = "extra == 'speech-macos'", specifier = ">=5.1" },
-    { name = "silero-vad", marker = "extra == 'speech-ubuntu'", specifier = ">=5.1" },
-    { name = "soundfile", marker = "extra == 'speech-ubuntu'", specifier = ">=0.13" },
+    { name = "silero-vad", marker = "extra == 'speech-portable'", specifier = ">=5.1" },
+    { name = "soundfile", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=0.13" },
+    { name = "soundfile", marker = "extra == 'speech-portable'", specifier = ">=0.13" },
     { name = "telethon", specifier = ">=1.40" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
 ]
-provides-extras = ["speech-macos", "speech-ubuntu"]
+provides-extras = ["speech-macos", "speech-portable", "speech"]
 
 [package.metadata.requires-dev]
 dev = [

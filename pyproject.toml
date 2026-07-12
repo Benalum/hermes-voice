@@ -20,7 +20,7 @@ speech-macos = [
     "misaki[en]>=0.7",
 ]
 
-speech-ubuntu = [
+speech-portable = [
     "faster-whisper>=1.2",
     "kokoro>=0.9",
     "soundfile>=0.13",
@@ -28,6 +28,23 @@ speech-ubuntu = [
     "onnxruntime>=1.20",
     "numba>=0.60",
     "misaki[en]>=0.7",
+]
+
+
+speech = [
+    "parakeet-mlx>=0.3; sys_platform == 'darwin' and (platform_machine == 'arm64' or platform_machine == 'aarch64')",
+    "mlx-audio>=0.2; sys_platform == 'darwin' and (platform_machine == 'arm64' or platform_machine == 'aarch64')",
+    "silero-vad>=5.1; sys_platform == 'darwin' and (platform_machine == 'arm64' or platform_machine == 'aarch64')",
+    "onnxruntime>=1.20; sys_platform == 'darwin' and (platform_machine == 'arm64' or platform_machine == 'aarch64')",
+    "numba>=0.60; sys_platform == 'darwin' and (platform_machine == 'arm64' or platform_machine == 'aarch64')",
+    "misaki[en]>=0.7; sys_platform == 'darwin' and (platform_machine == 'arm64' or platform_machine == 'aarch64')",
+    "faster-whisper>=1.2; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
+    "kokoro>=0.9; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
+    "soundfile>=0.13; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
+    "silero-vad>=5.1; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
+    "onnxruntime>=1.20; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
+    "numba>=0.60; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
+    "misaki[en]>=0.7; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
 ]
 
 [dependency-groups]
@@ -71,3 +88,14 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+# Hermes Voice optional platform speech imports
+[[tool.mypy.overrides]]
+module = [
+    "hermes_voice.io.stt_parakeet",
+    "hermes_voice.io.stt_faster_whisper",
+    "hermes_voice.io.tts_kokoro",
+    "hermes_voice.io.tts_kokoro_portable",
+    "hermes_voice.io.vad_silero",
+]
+disable_error_code = ["import-not-found", "import-untyped"]
