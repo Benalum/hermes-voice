@@ -1,12 +1,17 @@
 """Relay wiring tests with a fake Telethon client - no network, no session."""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from telethon.tl import types
 
-from hermes_voice.io.telegram_telethon import TelegramRelay
+from hermes_voice.io.telegram_telethon import (
+    TelegramRelay,
+    TelegramTopic,
+    TelegramTopicMessage,
+)
 from hermes_voice.kit.replies import ReplyConfig
 from hermes_voice.kit.session import AgentSpeakable, Event, TurnSettled
 from hermes_voice.server.config import ChatConfig
@@ -23,12 +28,113 @@ class FakeClient:
         self.sent: list[tuple[Any, str, int | None]] = []
         self.entities = {"@hermes_bot": types.User(id=111), 222: types.User(id=222)}
         self.next_message_id = 10
+        self.requests: list[Any] = []
+        self.topics = [
+            SimpleNamespace(
+                id=105,
+                title="Latest Topic",
+                top_message=130,
+                closed=False,
+                pinned=True,
+            ),
+            SimpleNamespace(
+                id=98,
+                title="System",
+                top_message=110,
+                closed=False,
+                pinned=False,
+            ),
+        ]
+        topic_reply = SimpleNamespace(
+            reply_to_top_id=98,
+            reply_to_msg_id=98,
+            forum_topic=True,
+        )
+        other_topic_reply = SimpleNamespace(
+            reply_to_top_id=105,
+            reply_to_msg_id=105,
+            forum_topic=True,
+        )
+        self.topic_messages = {
+            98: [
+                SimpleNamespace(
+                    id=110,
+                    out=False,
+                    message="Hermes reply",
+                    media=None,
+                    reply_to=topic_reply,
+                    date=datetime(2026, 7, 12, 4, 1, tzinfo=UTC),
+                ),
+                SimpleNamespace(
+                    id=109,
+                    out=True,
+                    message="User prompt",
+                    media=None,
+                    reply_to=topic_reply,
+                    date=datetime(2026, 7, 12, 4, 0, tzinfo=UTC),
+                ),
+                SimpleNamespace(
+                    id=108,
+                    out=False,
+                    message="diagram",
+                    media=SimpleNamespace(kind="photo"),
+                    reply_to=topic_reply,
+                    date=datetime(2026, 7, 12, 3, 59, tzinfo=UTC),
+                ),
+                SimpleNamespace(
+                    id=107,
+                    out=False,
+                    message="",
+                    media=None,
+                    reply_to=topic_reply,
+                    date=datetime(2026, 7, 12, 3, 58, 30, tzinfo=UTC),
+                ),
+                SimpleNamespace(
+                    id=98,
+                    out=False,
+                    message="",
+                    media=None,
+                    reply_to=topic_reply,
+                    date=datetime(2026, 7, 12, 3, 58, tzinfo=UTC),
+                ),
+                SimpleNamespace(
+                    id=120,
+                    out=False,
+                    message="wrong topic",
+                    media=None,
+                    reply_to=other_topic_reply,
+                    date=datetime(2026, 7, 12, 4, 2, tzinfo=UTC),
+                ),
+            ]
+        }
 
     def add_event_handler(self, callback: Any, event_filter: Any) -> None:
         self.handlers.append((callback, type(event_filter).__name__))
 
     async def get_entity(self, peer: Any) -> Any:
         return self.entities[peer]
+
+    async def get_input_entity(self, entity: Any) -> Any:
+        return SimpleNamespace(entity=entity)
+
+    async def __call__(self, request: Any) -> Any:
+        self.requests.append(request)
+        request_name = type(request).__name__
+
+        if request_name == "GetForumTopicsRequest":
+            query = request.q.casefold()
+            topics = [
+                topic
+                for topic in self.topics
+                if not query or query in topic.title.casefold()
+            ]
+            return SimpleNamespace(topics=topics[: request.limit])
+
+        if request_name == "GetRepliesRequest":
+            messages = self.topic_messages.get(request.msg_id, [])
+            return SimpleNamespace(messages=messages[: request.limit])
+
+        raise AssertionError(f"unexpected Telegram request: {request_name}")
 
     async def send_message(
         self,
@@ -103,6 +209,102 @@ def make_relay() -> tuple[TelegramRelay, FakeClient, Clock, list[Event]]:
 
 
 class TestTelegramRelay:
+    async def test_list_topics_preserves_telegram_order_and_metadata(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+
+        topics = await relay.list_topics(limit=25)
+
+        assert topics == (
+            TelegramTopic(
+                topic_id=105,
+                title="Latest Topic",
+                top_message_id=130,
+                closed=False,
+                pinned=True,
+            ),
+            TelegramTopic(
+                topic_id=98,
+                title="System",
+                top_message_id=110,
+                closed=False,
+                pinned=False,
+            ),
+        )
+        request = client.requests[-1]
+        assert type(request).__name__ == "GetForumTopicsRequest"
+        assert request.limit == 25
+        assert request.q == ""
+
+    async def test_list_topics_passes_trimmed_search_to_telegram(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+
+        topics = await relay.list_topics(query="  system  ")
+
+        assert [topic.title for topic in topics] == ["System"]
+        assert client.requests[-1].q == "system"
+
+    async def test_topic_reads_require_active_chat_and_valid_limits(self) -> None:
+        relay, _, _, _ = make_relay()
+
+        with pytest.raises(RuntimeError, match="no active Telegram chat"):
+            await relay.list_topics()
+        with pytest.raises(ValueError, match="between 1 and 100"):
+            await relay.list_topics(limit=0)
+
+        await relay.reset("hermes")
+        with pytest.raises(ValueError, match="positive integer"):
+            await relay.load_topic_history(0)
+        with pytest.raises(ValueError, match="between 1 and 100"):
+            await relay.load_topic_history(98, limit=101)
+
+    async def test_load_topic_history_returns_chronological_conversation(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+
+        messages = await relay.load_topic_history(98, limit=50)
+
+        assert messages == (
+            TelegramTopicMessage(
+                message_id=108,
+                topic_id=98,
+                text="diagram",
+                is_outgoing=False,
+                has_attachment=True,
+                date=datetime(2026, 7, 12, 3, 59, tzinfo=UTC),
+            ),
+            TelegramTopicMessage(
+                message_id=109,
+                topic_id=98,
+                text="User prompt",
+                is_outgoing=True,
+                has_attachment=False,
+                date=datetime(2026, 7, 12, 4, 0, tzinfo=UTC),
+            ),
+            TelegramTopicMessage(
+                message_id=110,
+                topic_id=98,
+                text="Hermes reply",
+                is_outgoing=False,
+                has_attachment=False,
+                date=datetime(2026, 7, 12, 4, 1, tzinfo=UTC),
+            ),
+        )
+        request = client.requests[-1]
+        assert type(request).__name__ == "GetRepliesRequest"
+        assert request.msg_id == 98
+        assert request.limit == 50
+
+    async def test_load_topic_history_does_not_change_active_topic(self) -> None:
+        relay, _, _, _ = make_relay()
+        await relay.reset("hermes")
+        await relay.select_topic(105)
+
+        await relay.load_topic_history(98)
+
+        assert relay.active_topic_id == 105
+
     async def test_send_posts_into_the_active_chat_general_stream(self) -> None:
         relay, client, _, _ = make_relay()
         await relay.reset("hermes")

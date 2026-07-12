@@ -11,6 +11,8 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from hermes_voice.kit import session as sm
@@ -20,6 +22,26 @@ from hermes_voice.server.config import ChatConfig
 logger = logging.getLogger(__name__)
 
 TICK_INTERVAL_S = 0.25
+MAX_TELEGRAM_PAGE_SIZE = 100
+
+
+@dataclass(frozen=True, slots=True)
+class TelegramTopic:
+    topic_id: int
+    title: str
+    top_message_id: int | None
+    closed: bool
+    pinned: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TelegramTopicMessage:
+    message_id: int
+    topic_id: int
+    text: str
+    is_outgoing: bool
+    has_attachment: bool
+    date: datetime | None
 
 
 class TelegramRelay:
@@ -74,6 +96,73 @@ class TelegramRelay:
             "voice session bound to topic %s",
             topic_id if topic_id is not None else "general",
         )
+
+    async def list_topics(
+        self,
+        *,
+        query: str = "",
+        limit: int = MAX_TELEGRAM_PAGE_SIZE,
+    ) -> tuple[TelegramTopic, ...]:
+        _validate_limit(limit)
+        entity = self._require_entity()
+
+        from telethon.tl import functions
+
+        input_peer = await self._client.get_input_entity(entity)
+        result = await self._client(
+            functions.messages.GetForumTopicsRequest(
+                peer=input_peer,
+                offset_date=None,
+                offset_id=0,
+                offset_topic=0,
+                limit=limit,
+                q=query.strip(),
+            )
+        )
+
+        topics: list[TelegramTopic] = []
+        for item in getattr(result, "topics", []):
+            topic = _topic_from_telegram(item)
+            if topic is not None:
+                topics.append(topic)
+        return tuple(topics)
+
+    async def load_topic_history(
+        self,
+        topic_id: int,
+        *,
+        limit: int = 50,
+    ) -> tuple[TelegramTopicMessage, ...]:
+        if topic_id <= 0:
+            raise ValueError("topic_id must be a positive integer")
+        _validate_limit(limit)
+        entity = self._require_entity()
+
+        from telethon.tl import functions
+
+        input_peer = await self._client.get_input_entity(entity)
+        result = await self._client(
+            functions.messages.GetRepliesRequest(
+                peer=input_peer,
+                msg_id=topic_id,
+                offset_id=0,
+                offset_date=0,
+                add_offset=0,
+                limit=limit,
+                max_id=0,
+                min_id=0,
+                hash=0,
+            )
+        )
+
+        messages: list[TelegramTopicMessage] = []
+        for item in getattr(result, "messages", []):
+            message = _topic_message_from_telegram(item, topic_id=topic_id)
+            if message is not None:
+                messages.append(message)
+
+        messages.sort(key=lambda item: item.message_id)
+        return tuple(messages)
 
     async def send(self, text: str) -> None:
         if self._entity is None:
@@ -146,6 +235,74 @@ class TelegramRelay:
         while True:
             await asyncio.sleep(TICK_INTERVAL_S)
             self.pump()
+
+    def _require_entity(self) -> Any:
+        if self._entity is None:
+            raise RuntimeError("no active Telegram chat selected")
+        return self._entity
+
+
+def _validate_limit(limit: int) -> None:
+    if not 1 <= limit <= MAX_TELEGRAM_PAGE_SIZE:
+        raise ValueError(
+            f"limit must be between 1 and {MAX_TELEGRAM_PAGE_SIZE}, inclusive"
+        )
+
+
+def _topic_from_telegram(item: Any) -> TelegramTopic | None:
+    topic_id = getattr(item, "id", None)
+    title = getattr(item, "title", None)
+    if not isinstance(topic_id, int) or not isinstance(title, str) or not title.strip():
+        return None
+
+    top_message_id = getattr(item, "top_message", None)
+    if not isinstance(top_message_id, int):
+        top_message_id = None
+
+    return TelegramTopic(
+        topic_id=topic_id,
+        title=title.strip(),
+        top_message_id=top_message_id,
+        closed=bool(getattr(item, "closed", False)),
+        pinned=bool(getattr(item, "pinned", False)),
+    )
+
+
+def _topic_message_from_telegram(
+    item: Any,
+    *,
+    topic_id: int,
+) -> TelegramTopicMessage | None:
+    message_id = getattr(item, "id", None)
+    if not isinstance(message_id, int):
+        return None
+
+    item_topic_id = _topic_id_for(item)
+    if message_id != topic_id and item_topic_id != topic_id:
+        return None
+
+    raw_text = getattr(item, "message", None)
+    text = raw_text.strip() if isinstance(raw_text, str) else ""
+    has_attachment = getattr(item, "media", None) is not None
+
+    # Telegram can include blank service/action messages in topic history. They
+    # contain no user-visible text or attachment, so omit them from conversation
+    # history.
+    if not text and not has_attachment:
+        return None
+
+    date = getattr(item, "date", None)
+    if not isinstance(date, datetime):
+        date = None
+
+    return TelegramTopicMessage(
+        message_id=message_id,
+        topic_id=topic_id,
+        text=text,
+        is_outgoing=bool(getattr(item, "out", False)),
+        has_attachment=has_attachment,
+        date=date,
+    )
 
 
 def _topic_id_for(message: Any) -> int | None:
