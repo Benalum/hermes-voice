@@ -98,6 +98,7 @@ class SpeakStart:
 @dataclass(frozen=True)
 class SpeakStop:
     epoch: int
+    flush: bool = False
 
 
 @dataclass(frozen=True)
@@ -217,8 +218,8 @@ def encode_server_msg(msg: ServerMsg) -> str:
             body = {"type": "agent_text", "text": text, "message_id": message_id}
         case SpeakStart(epoch=epoch, sample_rate=sample_rate):
             body = {"type": "speak_start", "epoch": epoch, "sample_rate": sample_rate}
-        case SpeakStop(epoch=epoch):
-            body = {"type": "speak_stop", "epoch": epoch}
+        case SpeakStop(epoch=epoch, flush=flush):
+            body = {"type": "speak_stop", "epoch": epoch, "flush": flush}
         case ErrorMsg(message=message):
             body = {"type": "error", "message": message}
     return json.dumps(body)

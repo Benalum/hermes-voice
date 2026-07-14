@@ -31,6 +31,10 @@ from hermes_voice.kit.turns import BargeIn, SpeechEnd, SpeechStart, TurnConfig, 
 logger = logging.getLogger(__name__)
 
 TTS_SAMPLE_RATE = 24000
+TTS_SAMPLE_WIDTH_BYTES = 2
+TTS_FRAME_MS = 50
+TTS_FRAME_BYTES = TTS_SAMPLE_RATE * TTS_SAMPLE_WIDTH_BYTES * TTS_FRAME_MS // 1000
+TTS_PLAYBACK_GRACE_S = 0.15
 
 
 @dataclass(frozen=True)
@@ -121,6 +125,11 @@ class Orchestrator:
                 case SpeechEnd(pcm=utterance):
                     self.emit(sm.SpeechEnded(pcm=utterance))
                 case BargeIn():
+                    logger.info(
+                        "barge-in detected while speaking (threshold=%.2f, frames=%d)",
+                        self._config.turn.barge_threshold,
+                        self._config.turn.barge_frames,
+                    )
                     self.emit(sm.BargedIn())
                 case SpeechStart():
                     pass
@@ -207,18 +216,63 @@ class Orchestrator:
     async def _tts_worker(self) -> None:
         epoch = self._epoch
         await self._send(SpeakStart(epoch=epoch, sample_rate=TTS_SAMPLE_RATE))
-        while self._speech_texts:
-            text = self._speech_texts.popleft()
-            try:
-                pcm = await self._tts.synthesize(text)
-            except Exception:
-                logger.exception("TTS failed for %r", text)
-                continue
+        next_pcm: asyncio.Task[bytes] | None = None
+        try:
+            while True:
+                while self._speech_texts or next_pcm is not None:
+                    if next_pcm is None:
+                        text = self._speech_texts.popleft()
+                        next_pcm = asyncio.create_task(self._synthesize_safely(text))
+
+                    pcm = await next_pcm
+                    next_pcm = None
+                    if self._epoch != epoch:
+                        return
+
+                    # Prefetch the next sentence while the current PCM plays. This
+                    # preserves the original low-gap behavior without flooding the
+                    # browser faster than real time.
+                    if self._speech_texts:
+                        next_text = self._speech_texts.popleft()
+                        next_pcm = asyncio.create_task(self._synthesize_safely(next_text))
+
+                    await self._stream_pcm(epoch, pcm)
+                    if self._epoch != epoch:
+                        return
+
+                # Allow a message that arrives at the end of the current chunk to
+                # join the same speaking turn instead of being stranded in the queue.
+                await asyncio.sleep(TTS_PLAYBACK_GRACE_S)
+                if self._epoch != epoch:
+                    return
+                if not self._speech_texts:
+                    break
+
+            await self._send(SpeakStop(epoch=epoch, flush=False))
+            self.emit(sm.TtsFinished())
+        finally:
+            if next_pcm is not None and not next_pcm.done():
+                next_pcm.cancel()
+
+    async def _synthesize_safely(self, text: str) -> bytes:
+        try:
+            return await self._tts.synthesize(text)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("TTS failed for %r", text)
+            return b""
+
+    async def _stream_pcm(self, epoch: int, pcm: bytes) -> None:
+        for offset in range(0, len(pcm), TTS_FRAME_BYTES):
             if self._epoch != epoch:
                 return
-            await self._send_bytes(encode_audio_frame(epoch=epoch, pcm=pcm))
-        await self._send(SpeakStop(epoch=epoch))
-        self.emit(sm.TtsFinished())
+            chunk = pcm[offset : offset + TTS_FRAME_BYTES]
+            if not chunk:
+                continue
+            await self._send_bytes(encode_audio_frame(epoch=epoch, pcm=chunk))
+            duration_s = len(chunk) / (TTS_SAMPLE_RATE * TTS_SAMPLE_WIDTH_BYTES)
+            await asyncio.sleep(duration_s)
 
     async def _stop_speaking(self) -> None:
         old_epoch = self._epoch
@@ -229,7 +283,7 @@ class Orchestrator:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._tts_task
         self._tts_task = None
-        await self._send(SpeakStop(epoch=old_epoch))
+        await self._send(SpeakStop(epoch=old_epoch, flush=True))
 
     def _manage_wait_timer(self) -> None:
         should_run = self._session.state is sm.State.WAITING and self._session.turn_open

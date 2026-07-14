@@ -1,11 +1,30 @@
-"""Prepare agent message text for TTS: strip markdown, tame URLs, cap length."""
+"""Prepare agent message text for TTS and optionally cap its length."""
 
 from __future__ import annotations
 
+import os
 import re
 
-MAX_SPOKEN_CHARS = 1500
+DEFAULT_MAX_SPOKEN_CHARS = 12000
 _TRUNCATION_NOTICE = "… message truncated, see Telegram"
+
+
+def _read_max_spoken_chars() -> int:
+    """Return the configured speech limit; zero disables truncation."""
+    raw = os.environ.get(
+        "HV_MAX_SPOKEN_CHARS",
+        str(DEFAULT_MAX_SPOKEN_CHARS),
+    ).strip()
+
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_MAX_SPOKEN_CHARS
+
+    return max(0, value)
+
+
+MAX_SPOKEN_CHARS = _read_max_spoken_chars()
 
 _FENCED_CODE = re.compile(r"```.*?```", re.DOTALL)
 _MARKDOWN_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
@@ -54,6 +73,6 @@ def normalize_for_speech(text: str) -> str:
             lines.append((collapsed, without_marker != stripped))
 
     result = _join_lines(lines)
-    if len(result) > MAX_SPOKEN_CHARS:
+    if MAX_SPOKEN_CHARS > 0 and len(result) > MAX_SPOKEN_CHARS:
         result = result[: MAX_SPOKEN_CHARS - len(_TRUNCATION_NOTICE)] + _TRUNCATION_NOTICE
     return result

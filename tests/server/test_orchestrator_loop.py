@@ -85,7 +85,7 @@ class TestParrotLoop:
         assert epoch == speak_start["epoch"]
         assert audio[0][4:].startswith(b"\x11\x22")
 
-        assert any(c == {"type": "speak_stop", "epoch": epoch} for c in controls)
+        assert any(c == {"type": "speak_stop", "epoch": epoch, "flush": False} for c in controls)
 
     def test_utterance_pcm_reaches_stt_with_pre_roll(self) -> None:
         client, stt = open_session()

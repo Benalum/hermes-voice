@@ -157,7 +157,12 @@ class TestServerMessages:
         assert encode_server_msg(SpeakStart(epoch=3, sample_rate=24000)) == (
             '{"type": "speak_start", "epoch": 3, "sample_rate": 24000}'
         )
-        assert encode_server_msg(SpeakStop(epoch=3)) == '{"type": "speak_stop", "epoch": 3}'
+        assert encode_server_msg(SpeakStop(epoch=3)) == (
+            '{"type": "speak_stop", "epoch": 3, "flush": false}'
+        )
+        assert encode_server_msg(SpeakStop(epoch=3, flush=True)) == (
+            '{"type": "speak_stop", "epoch": 3, "flush": true}'
+        )
 
     def test_encodes_error(self) -> None:
         assert encode_server_msg(ErrorMsg(message="boom")) == (

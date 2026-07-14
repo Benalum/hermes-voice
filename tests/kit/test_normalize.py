@@ -1,3 +1,4 @@
+import hermes_voice.kit.normalize as normalize
 from hermes_voice.kit.normalize import normalize_for_speech
 
 
@@ -35,10 +36,31 @@ class TestNormalizeForSpeech:
     def test_collapses_whitespace(self) -> None:
         assert normalize_for_speech("a  b\n\n\nc") == "a b c"
 
-    def test_caps_length_with_truncation_notice(self) -> None:
+    def test_caps_length_with_truncation_notice(self, monkeypatch) -> None:
+        monkeypatch.setattr(normalize, "MAX_SPOKEN_CHARS", 1500)
+
         result = normalize_for_speech("word " * 1000)
-        assert len(result) <= 1500
+
+        assert len(result) == 1500
         assert result.endswith("… message truncated, see Telegram")
+
+    def test_zero_disables_truncation(self, monkeypatch) -> None:
+        monkeypatch.setattr(normalize, "MAX_SPOKEN_CHARS", 0)
+
+        result = normalize_for_speech("word " * 1000)
+
+        assert len(result) > 1500
+        assert "message truncated" not in result
+
+    def test_environment_zero_disables_limit(self, monkeypatch) -> None:
+        monkeypatch.setenv("HV_MAX_SPOKEN_CHARS", "0")
+
+        assert normalize._read_max_spoken_chars() == 0
+
+    def test_invalid_environment_uses_default(self, monkeypatch) -> None:
+        monkeypatch.setenv("HV_MAX_SPOKEN_CHARS", "invalid")
+
+        assert normalize._read_max_spoken_chars() == normalize.DEFAULT_MAX_SPOKEN_CHARS
 
     def test_empty_input_gives_empty_output(self) -> None:
         assert normalize_for_speech("") == ""

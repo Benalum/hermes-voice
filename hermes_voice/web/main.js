@@ -331,7 +331,8 @@ function handleControl(msg) {
       });
       break;
     case "speak_stop":
-      playerNode?.port.postMessage({ flush: true });
+      if (msg.epoch !== currentEpoch) break;
+      if (msg.flush) playerNode?.port.postMessage({ flush: true });
       break;
     case "error":
       if (msg.message.includes("invalid token")) {
