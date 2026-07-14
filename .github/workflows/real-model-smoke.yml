@@ -1,0 +1,48 @@
+
+name: Real model smoke
+
+on:
+  push:
+    branches: [feature/platform-validation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-model:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu 24.04 portable models
+            os: ubuntu-24.04
+            speech_extra: speech
+          - name: macOS 15 Apple Silicon MLX models
+            os: macos-15
+            speech_extra: speech
+          - name: macOS 15 Intel portable models
+            os: macos-15-intel
+            speech_extra: speech
+          - name: Windows 2025 portable models
+            os: windows-2025
+            speech_extra: speech-portable
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked --extra ${{ matrix.speech_extra }} --group dev
+      - name: Run actual model loop
+        run: uv run python scripts/run_real_machine_test.py --port 8991 --timeout 1200
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: real-model-${{ matrix.os }}
+          path: reports/real-machine/*.json
+          if-no-files-found: warn

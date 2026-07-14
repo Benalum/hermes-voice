@@ -1,0 +1,85 @@
+
+name: Platform clean install
+
+on:
+  pull_request:
+  push:
+    branches: [main, feature/platform-validation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clean-install:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu 24.04 x64
+            os: ubuntu-24.04
+            backend: portable
+            speech_extra: speech
+          - name: macOS 15 Apple Silicon
+            os: macos-15
+            backend: mlx
+            speech_extra: speech
+          - name: macOS 15 Intel
+            os: macos-15-intel
+            backend: portable
+            speech_extra: speech
+          - name: Windows Server 2025 x64
+            os: windows-2025
+            backend: portable
+            speech_extra: speech-portable
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install locked dependencies
+        run: uv sync --locked --extra ${{ matrix.speech_extra }} --group dev
+
+      - name: Verify platform backend and imports
+        run: uv run python scripts/verify_platform.py --expected-backend ${{ matrix.backend }} --json
+
+      - name: Verify documentation
+        run: uv run python scripts/verify_readmes.py
+
+      - name: Render Linux service
+        if: runner.os == 'Linux'
+        run: bash scripts/linux/install-systemd-user.sh --dry-run
+
+      - name: Render macOS launch agent
+        if: runner.os == 'macOS'
+        run: zsh scripts/macos/install-launch-agent.sh --dry-run
+
+      - name: Render Windows scheduled task
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/windows/install-hermes-voice-task.ps1 -DryRun
+
+      - name: Unit tests
+        run: uv run pytest -q
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: mypy
+        run: uv run mypy --no-incremental hermes_voice
+
+      - name: JavaScript syntax
+        run: node --check hermes_voice/web/main.js
+
+      - name: Lock file unchanged
+        shell: bash
+        run: git diff --exit-code -- uv.lock pyproject.toml
