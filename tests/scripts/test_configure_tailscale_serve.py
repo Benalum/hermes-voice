@@ -166,7 +166,7 @@ def test_configure_free_port_builds_persistent_command() -> None:
 
     assert commands == [
         [
-            "/usr/bin/tailscale",
+            str(Path("/usr/bin/tailscale")),
             "serve",
             "--bg",
             "--yes",
