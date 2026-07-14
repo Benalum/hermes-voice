@@ -25,7 +25,7 @@ speech-portable = [
     "kokoro>=0.9",
     "soundfile>=0.13",
     "silero-vad>=5.1",
-    "onnxruntime>=1.20,<1.24; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "onnxruntime==1.23.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "onnxruntime>=1.20; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "numba>=0.60",
     "misaki[en]>=0.7",
@@ -44,7 +44,7 @@ speech = [
     "soundfile>=0.13; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
     "silero-vad>=5.1; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
     "onnxruntime>=1.20; sys_platform == 'linux'",
-    "onnxruntime>=1.20,<1.24; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "onnxruntime==1.23.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "numba>=0.60; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
     "misaki[en]>=0.7; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
 ]
@@ -66,11 +66,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hermes_voice"]
-
-[tool.uv]
-required-environments = [
-    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
-]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
