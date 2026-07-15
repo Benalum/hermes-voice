@@ -113,6 +113,7 @@ def main() -> int:
                 health = wait_for_health(
                     f"http://127.0.0.1:{args.port}/healthz",
                     args.timeout,
+                    process=server,
                 )
                 report["health"] = health
                 e2e = subprocess.run(
@@ -157,6 +158,8 @@ def main() -> int:
                     errors="replace",
                 )[-20000:]
 
+    if failure is not None:
+        report["error"] = f"{type(failure).__name__}: {failure}"
     report["result"] = "pass" if success else "fail"
     report["manual_checks_required"] = [
         "physical browser microphone",

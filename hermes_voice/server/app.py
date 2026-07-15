@@ -233,9 +233,15 @@ def create_app(
                 if callable(warmup):
                     await warmup()
             health["models"] = "warm"
-        yield
-        if client is not None and telegram_client is None:
-            await client.disconnect()
+        try:
+            yield
+        finally:
+            for port in speech_ports.values():
+                close = getattr(port, "close", None)
+                if callable(close):
+                    close()
+            if client is not None and telegram_client is None:
+                await client.disconnect()
 
     app = FastAPI(lifespan=lifespan)
 
