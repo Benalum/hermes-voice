@@ -19,15 +19,19 @@ jobs:
           - name: Ubuntu 24.04 portable models
             os: ubuntu-24.04
             speech_extra: speech
+            whisper_model: small.en
           - name: macOS 15 Apple Silicon MLX models
             os: macos-15
             speech_extra: speech
+            whisper_model: small.en
           - name: macOS 15 Intel portable models
             os: macos-15-intel
             speech_extra: speech
+            whisper_model: tiny.en
           - name: Windows 2025 portable models
             os: windows-2025
             speech_extra: speech-portable
+            whisper_model: small.en
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -41,6 +45,8 @@ jobs:
         run: command -v ffmpeg >/dev/null 2>&1 || brew install ffmpeg
       - run: uv sync --locked --extra ${{ matrix.speech_extra }} --group dev
       - name: Run actual model loop
+        env:
+          HV_WHISPER_MODEL: ${{ matrix.whisper_model }}
         run: uv run python scripts/run_real_machine_test.py --port 8991 --timeout 1200
       - name: Upload evidence
         if: always()

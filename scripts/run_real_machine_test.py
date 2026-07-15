@@ -19,10 +19,17 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def wait_for_health(url: str, timeout: float) -> dict[str, object]:
+def wait_for_health(
+    url: str,
+    timeout: float,
+    *,
+    process: subprocess.Popen[Any] | None = None,
+) -> dict[str, object]:
     deadline = time.monotonic() + timeout
     last_error: Exception | None = None
     while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            raise RuntimeError(f"gateway exited during startup with code {process.returncode}")
         try:
             with urllib.request.urlopen(url, timeout=5) as response:
                 payload = json.loads(response.read().decode("utf-8"))
@@ -92,6 +99,8 @@ def main() -> int:
             str(args.port),
         ]
         log_path = Path(temp) / "uvicorn.log"
+        failure: Exception | None = None
+        success = False
         with log_path.open("w", encoding="utf-8") as log:
             server = subprocess.Popen(
                 command,
@@ -133,8 +142,11 @@ def main() -> int:
                         if response.status != 200:
                             raise RuntimeError(f"{route} returned {response.status}")
                 success = e2e.returncode == 0
+            except Exception as exc:
+                failure = exc
             finally:
-                server.terminate()
+                if server.poll() is None:
+                    server.terminate()
                 try:
                     server.wait(timeout=20)
                 except subprocess.TimeoutExpired:
@@ -155,7 +167,14 @@ def main() -> int:
         "startup after reboot or login",
     ]
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(report["steps"]["websocket_loop"]["stdout"])
+    websocket_loop = report["steps"].get("websocket_loop")
+    if isinstance(websocket_loop, dict):
+        print(websocket_loop.get("stdout", ""))
+    if failure is not None:
+        print(f"ERROR: {report['error']}", file=sys.stderr)
+        server_log = str(report.get("server_log", ""))
+        if server_log:
+            print(server_log, file=sys.stderr)
     print(f"{report['result'].upper()} report: {report_path}")
     return 0 if success else 1
 

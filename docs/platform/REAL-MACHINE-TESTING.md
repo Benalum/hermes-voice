@@ -49,3 +49,7 @@ Start the real Telegram service, connect through the intended browser URL, and r
 
 Save the JSON report, platform version, architecture, service status, Tailscale Serve status, and relevant logs.
 Never include gateway tokens, Telegram API hashes, BotFather tokens, or `.session` contents.
+## CI model profiles
+
+The Intel macOS GitHub Actions smoke test uses `HV_WHISPER_MODEL=tiny.en` to keep cold-start model download and initialization bounded on the hosted x86_64 runner. Normal installations retain the application default of `small.en`; this CI override tests the complete portable speech path rather than production transcription quality.
+
