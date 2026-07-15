@@ -30,7 +30,9 @@ speech-portable = [
     "torchaudio==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "onnxruntime==1.23.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "onnxruntime>=1.20; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    "numba>=0.60",
+    "numba==0.60.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "llvmlite==0.43.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "numba>=0.60; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "misaki[en]>=0.7",
 ]
 
@@ -50,7 +52,9 @@ speech = [
     "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "torchaudio==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "onnxruntime==1.23.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "numba>=0.60; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
+    "numba>=0.60; sys_platform == 'linux'",
+    "numba==0.60.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "llvmlite==0.43.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "misaki[en]>=0.7; sys_platform == 'linux' or (sys_platform == 'darwin' and platform_machine != 'arm64' and platform_machine != 'aarch64')",
 ]
 

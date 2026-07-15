@@ -738,9 +738,11 @@ dependencies = [
 speech = [
     { name = "faster-whisper", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
     { name = "kokoro", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
+    { name = "llvmlite", version = "0.43.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "misaki", extra = ["en"], marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "mlx-audio", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
-    { name = "numba", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "numba", version = "0.60.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "numba", version = "0.66.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
     { name = "onnxruntime", version = "1.23.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "onnxruntime", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
     { name = "parakeet-mlx", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
@@ -752,7 +754,7 @@ speech = [
 speech-macos = [
     { name = "misaki", extra = ["en"], marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
     { name = "mlx-audio", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
-    { name = "numba", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
+    { name = "numba", version = "0.66.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
     { name = "onnxruntime", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
     { name = "parakeet-mlx", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
     { name = "silero-vad", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
@@ -760,8 +762,10 @@ speech-macos = [
 speech-portable = [
     { name = "faster-whisper" },
     { name = "kokoro" },
+    { name = "llvmlite", version = "0.43.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "misaki", extra = ["en"] },
-    { name = "numba" },
+    { name = "numba", version = "0.60.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "numba", version = "0.66.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "onnxruntime", version = "1.23.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "onnxruntime", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "silero-vad" },
@@ -788,6 +792,8 @@ requires-dist = [
     { name = "faster-whisper", marker = "extra == 'speech-portable'", specifier = ">=1.2" },
     { name = "kokoro", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=0.9" },
     { name = "kokoro", marker = "extra == 'speech-portable'", specifier = ">=0.9" },
+    { name = "llvmlite", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'speech'", specifier = "==0.43.0" },
+    { name = "llvmlite", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'speech-portable'", specifier = "==0.43.0" },
     { name = "misaki", extras = ["en"], marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech')", specifier = ">=0.7" },
     { name = "misaki", extras = ["en"], marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech-macos') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech-macos')", specifier = ">=0.7" },
     { name = "misaki", extras = ["en"], marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=0.7" },
@@ -796,8 +802,10 @@ requires-dist = [
     { name = "mlx-audio", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech-macos') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech-macos')", specifier = ">=0.2" },
     { name = "numba", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech')", specifier = ">=0.60" },
     { name = "numba", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech-macos') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech-macos')", specifier = ">=0.60" },
-    { name = "numba", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=0.60" },
-    { name = "numba", marker = "extra == 'speech-portable'", specifier = ">=0.60" },
+    { name = "numba", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'speech'", specifier = "==0.60.0" },
+    { name = "numba", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'speech-portable'", specifier = "==0.60.0" },
+    { name = "numba", marker = "(platform_machine != 'x86_64' and extra == 'speech-portable') or (sys_platform != 'darwin' and extra == 'speech-portable')", specifier = ">=0.60" },
+    { name = "numba", marker = "sys_platform == 'linux' and extra == 'speech'", specifier = ">=0.60" },
     { name = "numpy", marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'", specifier = ">=2.0" },
     { name = "numpy", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = "==1.26.4" },
     { name = "onnxruntime", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin' and extra == 'speech') or (platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'speech')", specifier = ">=1.20" },
@@ -1114,7 +1122,7 @@ dependencies = [
     { name = "joblib" },
     { name = "lazy-loader" },
     { name = "msgpack" },
-    { name = "numba" },
+    { name = "numba", version = "0.66.0", source = { registry = "https://pypi.org/simple" } },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
     { name = "pooch" },
     { name = "scikit-learn" },
@@ -1194,8 +1202,36 @@ wheels = [
 
 [[package]]
 name = "llvmlite"
+version = "0.43.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.13' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9f/3d/f513755f285db51ab363a53e898b85562e950f79a2e6767a364530c2f645/llvmlite-0.43.0.tar.gz", hash = "sha256:ae2b5b5c3ef67354824fb75517c8db5fbe93bc02cd9671f3c62271626bc041d5", size = 157069, upload-time = "2024-06-13T18:09:32.641Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/67/9443509e5d2b6d8587bae3ede5598fa8bd586b1c7701696663ea8af15b5b/llvmlite-0.43.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:f99b600aa7f65235a5a05d0b9a9f31150c390f31261f2a0ba678e26823ec38f7", size = 31064409, upload-time = "2024-06-13T18:08:54.375Z" },
+]
+
+[[package]]
+name = "llvmlite"
 version = "0.48.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "(python_full_version >= '3.15' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version >= '3.15' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "python_full_version >= '3.15' and sys_platform == 'linux'",
+    "python_full_version >= '3.15' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.15' and sys_platform != 'darwin' and sys_platform != 'linux'",
+    "(python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and sys_platform == 'linux'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and sys_platform != 'darwin' and sys_platform != 'linux'",
+    "(python_full_version < '3.13' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version < '3.13' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "python_full_version < '3.13' and sys_platform == 'linux'",
+    "python_full_version < '3.13' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.13' and sys_platform != 'darwin' and sys_platform != 'linux'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/dc/a0/acc8ffcd5bdc63df0097e22c719bfcd61b604358343089313a8aebbb24ab/llvmlite-0.48.0.tar.gz", hash = "sha256:543b19f9ef8f3c7c60d1468191e4ee1b1537bf9f8a3d56f64c0ddd98de92edd2", size = 184016, upload-time = "2026-07-02T20:20:05.308Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/92/a2/28696a9e61e245d1a79816d29d106692a90a2b6e7d78c98b326db70827af/llvmlite-0.48.0-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:d66c3beb4209087ddd4cf4ed2a0856b6887e6a913bdcf1aacfec9851cf2cba4e", size = 40480651, upload-time = "2026-07-01T18:41:35.694Z" },
@@ -1570,12 +1606,43 @@ wheels = [
 
 [[package]]
 name = "numba"
+version = "0.60.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.13' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "llvmlite", version = "0.43.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" } },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3c/93/2849300a9184775ba274aba6f82f303343669b0592b7bb0849ea713dabb0/numba-0.60.0.tar.gz", hash = "sha256:5df6158e5584eece5fc83294b949fd30b9f1125df7708862205217e068aabf16", size = 2702171, upload-time = "2024-06-13T18:11:19.869Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/5c/b5ec752c475e78a6c3676b67c514220dbde2725896bbb0b6ec6ea54b2738/numba-0.60.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:d7da4098db31182fc5ffe4bc42c6f24cd7d1cb8a14b59fd755bfee32e34b8404", size = 2647866, upload-time = "2024-06-13T18:10:54.453Z" },
+]
+
+[[package]]
+name = "numba"
 version = "0.66.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "(python_full_version >= '3.15' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version >= '3.15' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "python_full_version >= '3.15' and sys_platform == 'linux'",
+    "python_full_version >= '3.15' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.15' and sys_platform != 'darwin' and sys_platform != 'linux'",
+    "(python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and sys_platform == 'linux'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and sys_platform != 'darwin' and sys_platform != 'linux'",
+    "(python_full_version < '3.13' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version < '3.13' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "python_full_version < '3.13' and sys_platform == 'linux'",
+    "python_full_version < '3.13' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.13' and sys_platform != 'darwin' and sys_platform != 'linux'",
+]
 dependencies = [
-    { name = "llvmlite" },
-    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
+    { name = "llvmlite", version = "0.48.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ae/a0/570e3dc53e5602b49108f62a13e529f1eec8bfc7ef37d49c825924dcf546/numba-0.66.0.tar.gz", hash = "sha256:b900e63a0e26c05ea9a6d5a3a5a0a177cb64c5011887bf43edb8c3ed2c38d363", size = 2806181, upload-time = "2026-07-01T23:12:46.36Z" }
 wheels = [
