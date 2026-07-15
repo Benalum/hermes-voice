@@ -44,7 +44,7 @@ uv run python scripts/verify_platform.py --expected-backend portable
 
 Do not set `HV_SPEECH_BACKEND=mlx` on an Intel Mac.
 
-Intel macOS uses a compatibility set of `numpy==1.26.4`, `torch==2.2.2`, `torchaudio==2.2.2`, `onnxruntime==1.23.2`, `numba==0.60.0`, and `llvmlite==0.43.0`. These versions provide compatible Python 3.12 x86_64 macOS wheels for the portable speech stack. Do not remove these Intel-specific pins or bypass the lock file.
+Intel macOS uses a compatibility set of `numpy==1.26.4`, `torch==2.2.2`, `torchaudio==2.2.2`, `transformers==4.57.6`, `onnxruntime==1.23.2`, `numba==0.60.0`, and `llvmlite==0.43.0`. These versions provide compatible Python 3.12 x86_64 macOS wheels and preserve support for the portable Kokoro speech stack. Do not remove these Intel-specific pins or bypass the lock file.
 
 ## 4. Configure and authorize Telegram
 
