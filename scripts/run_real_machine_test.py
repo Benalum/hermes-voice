@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """Run a real-model parrot loop and save platform evidence."""
 
@@ -44,9 +43,7 @@ def main() -> int:
 
     args.report_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    report_name = (
-        f"{platform.system().lower()}-{platform.machine()}-{timestamp}.json"
-    )
+    report_name = f"{platform.system().lower()}-{platform.machine()}-{timestamp}.json"
     report_path = args.report_dir / report_name
     report: dict[str, Any] = {
         "timestamp_utc": timestamp,
@@ -58,7 +55,10 @@ def main() -> int:
         "steps": {},
     }
 
-    with tempfile.TemporaryDirectory(prefix="hermes-voice-real-") as temp:
+    with tempfile.TemporaryDirectory(
+        prefix="hermes-voice-real-",
+        ignore_cleanup_errors=sys.platform == "win32",
+    ) as temp:
         pcm_path = Path(temp) / "probe.pcm"
         generation = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "generate_probe_audio.py"), str(pcm_path)],

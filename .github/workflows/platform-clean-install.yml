@@ -46,6 +46,10 @@ jobs:
       - name: Install Python 3.12
         run: uv python install 3.12
 
+      - name: Install FFmpeg on macOS
+        if: runner.os == 'macOS'
+        run: command -v ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+
       - name: Install locked dependencies
         run: uv sync --locked --extra ${{ matrix.speech_extra }} --group dev
 

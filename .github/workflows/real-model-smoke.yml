@@ -36,6 +36,9 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install 3.12
+      - name: Install FFmpeg on macOS
+        if: runner.os == 'macOS'
+        run: command -v ffmpeg >/dev/null 2>&1 || brew install ffmpeg
       - run: uv sync --locked --extra ${{ matrix.speech_extra }} --group dev
       - name: Run actual model loop
         run: uv run python scripts/run_real_machine_test.py --port 8991 --timeout 1200

@@ -44,7 +44,7 @@ uv run python scripts/verify_platform.py --expected-backend portable
 
 Do not set `HV_SPEECH_BACKEND=mlx` on an Intel Mac.
 
-The locked dependency set pins `onnxruntime==1.23.2` on Intel macOS because that release provides a Python 3.12 x86_64 wheel. Newer releases no longer publish Intel macOS wheels; do not remove this platform pin or bypass the lock file.
+Intel macOS uses a compatibility set of `torch==2.2.2`, `torchaudio==2.2.2`, `onnxruntime==1.23.2`, and `numpy==1.26.4`. These are the final compatible Python 3.12 x86_64 macOS binaries required by the portable speech stack. Do not remove these Intel-specific pins or bypass the lock file.
 
 ## 4. Configure and authorize Telegram
 

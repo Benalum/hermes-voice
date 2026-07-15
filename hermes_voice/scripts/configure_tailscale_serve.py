@@ -338,7 +338,8 @@ def main() -> int:
             )
     except (RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
-        if platform.system() == "Linux" and os.geteuid() != 0:
+        geteuid = getattr(os, "geteuid", None)
+        if platform.system() == "Linux" and callable(geteuid) and geteuid() != 0:
             print(
                 "On Linux, retry with sudo if Tailscale reports a permissions error.",
                 file=sys.stderr,

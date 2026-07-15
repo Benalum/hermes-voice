@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """Model-free platform verification for clean installs and CI."""
 
@@ -63,7 +62,9 @@ def main() -> int:
         if not path.is_file():
             errors.append(f"missing required path: {path.relative_to(ROOT)}")
 
-    tools = {name: shutil.which(name) for name in ("git", "node", "tailscale", "uv")}
+    tools = {name: shutil.which(name) for name in ("ffmpeg", "git", "node", "tailscale", "uv")}
+    if sys.platform == "darwin" and tools["ffmpeg"] is None:
+        errors.append("ffmpeg is required on macOS for speech decoding")
     report = {
         "os": platform.system(),
         "release": platform.release(),
