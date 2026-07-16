@@ -8,8 +8,6 @@ import struct
 import sys
 from typing import Any, BinaryIO
 
-import numpy as np
-
 _FRAME_HEADER = struct.Struct("!I")
 _MAX_FRAME_BYTES = 256 * 1024 * 1024
 
@@ -51,6 +49,10 @@ def _write_response(stream: BinaryIO, **response: object) -> None:
 
 
 def _transcribe(model: Any, pcm: bytes) -> str:
+    # Faster-Whisper imports CTranslate2 before NumPy. Preserve that order
+    # on Intel macOS to avoid initializing competing OpenMP runtimes.
+    import numpy as np
+
     audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
     segments, _info = model.transcribe(
         audio,
@@ -76,7 +78,7 @@ def main() -> int:
     stdout = sys.stdout.buffer
 
     try:
-        from faster_whisper import WhisperModel  # type: ignore[import-untyped]
+        from faster_whisper import WhisperModel  # type: ignore
 
         model = WhisperModel(
             args.model_id,

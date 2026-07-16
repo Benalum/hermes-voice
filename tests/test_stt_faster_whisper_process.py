@@ -123,3 +123,9 @@ def test_intel_adapter_uses_dedicated_worker(
         b"\x00\x00",
         "close",
     ]
+
+
+def test_worker_does_not_preload_numpy_before_faster_whisper() -> None:
+    from hermes_voice.io import stt_faster_whisper_worker as worker_module
+
+    assert "np" not in vars(worker_module)
