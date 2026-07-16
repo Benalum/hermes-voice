@@ -129,3 +129,71 @@ def test_worker_does_not_preload_numpy_before_faster_whisper() -> None:
     from hermes_voice.io import stt_faster_whisper_worker as worker_module
 
     assert "np" not in vars(worker_module)
+
+
+def test_worker_accepts_pinned_intel_ctranslate2(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hermes_voice.io import stt_faster_whisper_worker as worker_module
+
+    monkeypatch.setattr(worker_module.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        worker_module.platform,
+        "machine",
+        lambda: "x86_64",
+    )
+    monkeypatch.setattr(
+        worker_module.metadata,
+        "version",
+        lambda _name: "4.3.1",
+    )
+
+    worker_module._validate_ctranslate2_runtime()
+
+
+def test_worker_rejects_unpinned_intel_ctranslate2(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hermes_voice.io import stt_faster_whisper_worker as worker_module
+
+    monkeypatch.setattr(worker_module.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        worker_module.platform,
+        "machine",
+        lambda: "x86_64",
+    )
+    monkeypatch.setattr(
+        worker_module.metadata,
+        "version",
+        lambda _name: "4.8.1",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"requires ctranslate2 4\.3\.1; found 4\.8\.1",
+    ):
+        worker_module._validate_ctranslate2_runtime()
+
+
+def test_worker_allows_current_ctranslate2_elsewhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hermes_voice.io import stt_faster_whisper_worker as worker_module
+
+    monkeypatch.setattr(worker_module.sys, "platform", "linux")
+    monkeypatch.setattr(
+        worker_module.platform,
+        "machine",
+        lambda: "x86_64",
+    )
+
+    def unexpected_version_lookup(_name: str) -> str:
+        raise AssertionError("version lookup should not run outside Intel macOS")
+
+    monkeypatch.setattr(
+        worker_module.metadata,
+        "version",
+        unexpected_version_lookup,
+    )
+
+    worker_module._validate_ctranslate2_runtime()

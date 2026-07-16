@@ -4,12 +4,34 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import struct
 import sys
+from importlib import metadata
 from typing import Any, BinaryIO
 
 _FRAME_HEADER = struct.Struct("!I")
 _MAX_FRAME_BYTES = 256 * 1024 * 1024
+_INTEL_MAC_CTRANSLATE2_VERSION = "4.3.1"
+
+
+def _validate_ctranslate2_runtime() -> None:
+    """Reject Intel macOS CTranslate2 wheels with the known OpenMP conflict."""
+    is_intel_mac = sys.platform == "darwin" and platform.machine().lower() == "x86_64"
+    if not is_intel_mac:
+        return
+
+    try:
+        installed = metadata.version("ctranslate2")
+    except metadata.PackageNotFoundError as exc:
+        raise RuntimeError("CTranslate2 is not installed for the Intel macOS STT worker") from exc
+
+    if installed != _INTEL_MAC_CTRANSLATE2_VERSION:
+        raise RuntimeError(
+            "Intel macOS requires ctranslate2 "
+            f"{_INTEL_MAC_CTRANSLATE2_VERSION}; found {installed}. "
+            "Run the locked Hermes Voice dependency installation."
+        )
 
 
 def _read_exact(stream: BinaryIO, size: int) -> bytes | None:
@@ -78,6 +100,8 @@ def main() -> int:
     stdout = sys.stdout.buffer
 
     try:
+        _validate_ctranslate2_runtime()
+
         from faster_whisper import WhisperModel  # type: ignore
 
         model = WhisperModel(

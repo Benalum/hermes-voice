@@ -425,11 +425,42 @@ wheels = [
 
 [[package]]
 name = "ctranslate2"
+version = "4.3.1"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.13' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" } },
+    { name = "pyyaml" },
+    { name = "setuptools" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dc/a0/e75f10f76b4af815614f4a8f4b26969a8dde56857dd3ab4d69436e40b4d5/ctranslate2-4.3.1-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:fcf649d976070ddd33cdda00a7a60fde6f1fbe27d65d2c6141dd95153f965f01", size = 14668179, upload-time = "2024-06-11T15:05:06.027Z" },
+]
+
+[[package]]
+name = "ctranslate2"
 version = "4.8.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "(python_full_version >= '3.15' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version >= '3.15' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "python_full_version >= '3.15' and sys_platform == 'linux'",
+    "python_full_version >= '3.15' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.15' and sys_platform != 'darwin' and sys_platform != 'linux'",
+    "(python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and sys_platform == 'linux'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and sys_platform != 'darwin' and sys_platform != 'linux'",
+    "(python_full_version < '3.13' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version < '3.13' and platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "python_full_version < '3.13' and sys_platform == 'linux'",
+    "python_full_version < '3.13' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.13' and sys_platform != 'darwin' and sys_platform != 'linux'",
+]
 dependencies = [
-    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
     { name = "pyyaml" },
     { name = "setuptools" },
 ]
@@ -676,7 +707,8 @@ version = "1.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "av" },
-    { name = "ctranslate2" },
+    { name = "ctranslate2", version = "4.3.1", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "ctranslate2", version = "4.8.1", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "huggingface-hub", version = "1.21.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "onnxruntime", version = "1.23.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
@@ -737,6 +769,7 @@ dependencies = [
 
 [package.optional-dependencies]
 speech = [
+    { name = "ctranslate2", version = "4.3.1", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "faster-whisper", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
     { name = "kokoro", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
     { name = "llvmlite", version = "0.43.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
@@ -762,6 +795,7 @@ speech-macos = [
     { name = "silero-vad", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
 ]
 speech-portable = [
+    { name = "ctranslate2", version = "4.3.1", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "faster-whisper" },
     { name = "kokoro" },
     { name = "llvmlite", version = "0.43.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
@@ -790,6 +824,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "ctranslate2", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'speech'", specifier = "==4.3.1" },
+    { name = "ctranslate2", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'speech-portable'", specifier = "==4.3.1" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "faster-whisper", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=1.2" },
     { name = "faster-whisper", marker = "extra == 'speech-portable'", specifier = ">=1.2" },
