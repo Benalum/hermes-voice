@@ -1,6 +1,8 @@
 # Copy to ~/.hermes-voice/config.toml and fill in. chmod 600 the file.
 
 # Shared secret the browser client must present (stored in its localStorage).
+# Generate with:
+# python -c 'import secrets; print(secrets.token_urlsafe(32))'
 token = "change-me"
 
 [telegram]

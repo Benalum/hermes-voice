@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import math
 import os
+import secrets
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
@@ -38,7 +40,11 @@ from hermes_voice.kit.protocol import (
     encode_audio_frame,
     encode_server_msg,
 )
-from hermes_voice.server.config import Config, load_config
+from hermes_voice.server.config import (
+    Config,
+    load_config,
+    validate_config,
+)
 from hermes_voice.server.orchestrator import (
     Orchestrator,
     OrchestratorConfig,
@@ -46,6 +52,8 @@ from hermes_voice.server.orchestrator import (
 )
 
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+_ALLOWED_MODES = frozenset({"telegram", "parrot", "echo"})
+DEFAULT_HELLO_TIMEOUT_S = 10.0
 
 MakeResponder = Callable[[Callable[[sm.Event], None]], ResponderPort]
 
@@ -56,6 +64,14 @@ def _build_speech_ports() -> tuple[VadPort, SttPort, TtsPort]:
     return build_speech_ports()
 
 
+async def _disconnect_telegram_quietly(
+    client: Any,
+) -> None:
+    """Disconnect a partially initialized Telegram client."""
+    with contextlib.suppress(Exception):
+        await client.disconnect()
+
+
 async def _connect_telegram(config: Config) -> Any:
     from telethon import TelegramClient
 
@@ -64,25 +80,61 @@ async def _connect_telegram(config: Config) -> Any:
         config.telegram.api_id,
         config.telegram.api_hash,
     )
-    await client.connect()
-    if not await client.is_user_authorized():
-        raise RuntimeError(
-            "no authorized Telegram session - run: uv run python -m hermes_voice.scripts.login"
-        )
-    return client
 
-
-async def _receive_hello(ws: WebSocket, expected_token: str) -> Hello | None:
     try:
-        msg = decode_client_text(await ws.receive_text())
+        await client.connect()
+
+        if not await client.is_user_authorized():
+            raise RuntimeError(
+                "no authorized Telegram session - run: uv run python -m hermes_voice.scripts.login"
+            )
+
+        return client
+    except asyncio.CancelledError:
+        await _disconnect_telegram_quietly(client)
+        raise
+    except Exception:
+        await _disconnect_telegram_quietly(client)
+        raise
+
+
+async def _receive_hello(
+    ws: WebSocket,
+    expected_token: str,
+    *,
+    timeout_s: float,
+) -> Hello | None:
+    try:
+        async with asyncio.timeout(timeout_s):
+            event = await ws.receive()
+
+        if event["type"] == "websocket.disconnect":
+            return None
+
+        raw = event.get("text")
+
+        if raw is None:
+            raise ProtocolError("expected a text hello as first message")
+
+        msg = decode_client_text(raw)
+
         if not isinstance(msg, Hello):
             raise ProtocolError("expected hello as first message")
-        if expected_token and msg.token != expected_token:
+
+        if expected_token and not secrets.compare_digest(
+            msg.token,
+            expected_token,
+        ):
             raise ProtocolError("invalid token")
+
         return msg
+    except TimeoutError:
+        await ws.send_text(encode_server_msg(ErrorMsg(message="hello timeout")))
+        await ws.close(code=1008)
+        return None
     except ProtocolError as exc:
         await ws.send_text(encode_server_msg(ErrorMsg(message=str(exc))))
-        await ws.close()
+        await ws.close(code=1008)
         return None
 
 
@@ -206,10 +258,28 @@ def create_app(
     telegram_client: Any = None,
     make_responder: MakeResponder | None = None,
     orchestrator_config: OrchestratorConfig | None = None,
+    hello_timeout_s: float = DEFAULT_HELLO_TIMEOUT_S,
 ) -> FastAPI:
-    resolved_mode = mode or os.environ.get("HV_MODE", "telegram")
+    raw_mode = mode if mode is not None else os.environ.get("HV_MODE", "telegram")
+    resolved_mode = raw_mode.strip().lower()
+
+    if resolved_mode not in _ALLOWED_MODES:
+        allowed = ", ".join(sorted(_ALLOWED_MODES))
+        raise ValueError(f"invalid Hermes Voice mode {raw_mode!r}; expected one of: {allowed}")
+
+    if (
+        isinstance(hello_timeout_s, bool)
+        or not isinstance(
+            hello_timeout_s,
+            int | float,
+        )
+        or not math.isfinite(float(hello_timeout_s))
+        or hello_timeout_s <= 0
+    ):
+        raise ValueError("hello_timeout_s must be a finite positive number")
+
     telegram = resolved_mode == "telegram"
-    resolved_config = (config or load_config()) if telegram else None
+    resolved_config = validate_config(config or load_config()) if telegram else None
 
     speech_ports: dict[str, Any] = {"vad": vad, "stt": stt, "tts": tts}
     health = {"models": "n/a", "telegram": "n/a"}
@@ -284,7 +354,14 @@ def create_app(
     async def ws_endpoint(ws: WebSocket) -> None:
         await ws.accept()
         expected_token = resolved_config.token if resolved_config else ""
-        if await _receive_hello(ws, expected_token) is None:
+        if (
+            await _receive_hello(
+                ws,
+                expected_token,
+                timeout_s=float(hello_timeout_s),
+            )
+            is None
+        ):
             return
         make_responder, initial_chat, orch_config, ready = session_setup()
         await ws.send_text(encode_server_msg(ready))
