@@ -72,11 +72,36 @@ def _read_frame(stream: BinaryIO) -> bytes | None:
     return payload
 
 
-def _write_response(stream: BinaryIO, **response: object) -> None:
-    payload = json.dumps(response, ensure_ascii=True).encode("utf-8")
-    stream.write(_FRAME_HEADER.pack(len(payload)))
-    stream.write(payload)
+def _write_frame(
+    stream: BinaryIO,
+    payload: bytes,
+) -> None:
+    if len(payload) > _MAX_FRAME_BYTES:
+        raise ValueError(f"Faster-Whisper worker frame is too large: {len(payload)} bytes")
+
+    frame = _FRAME_HEADER.pack(len(payload)) + payload
+    offset = 0
+
+    while offset < len(frame):
+        written = stream.write(frame[offset:])
+
+        if written is None or written <= 0:
+            raise OSError("Faster-Whisper worker pipe write made no progress")
+
+        offset += written
+
     stream.flush()
+
+
+def _write_response(
+    stream: BinaryIO,
+    **response: object,
+) -> None:
+    payload = json.dumps(
+        response,
+        ensure_ascii=True,
+    ).encode("utf-8")
+    _write_frame(stream, payload)
 
 
 def _transcribe(model: Any, pcm: bytes) -> str:
