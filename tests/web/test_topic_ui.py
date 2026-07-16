@@ -45,11 +45,17 @@ def test_topic_history_is_temporary_browser_state() -> None:
     assert "indexedDB" not in MAIN
 
 
-def test_controls_are_kept_in_a_permanent_header() -> None:
+def test_voice_controls_use_sticky_action_strip() -> None:
+    header_end = INDEX.index("</header>")
+    voice_actions = INDEX.index('id="voice-actions"')
+    transcript = INDEX.index('id="transcript"')
+
+    assert header_end < voice_actions < transcript
+
     assert '<header id="app-header">' in INDEX
     assert "position: sticky; top: 0" in INDEX
-    assert "overflow: hidden" in INDEX
-    assert "min-height: 0; overflow-y: auto" in INDEX
+    assert "overflow-y: auto" in INDEX
+    assert "overflow: hidden" not in INDEX
 
 
 def test_immersion_control_is_present() -> None:

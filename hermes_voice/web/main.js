@@ -73,7 +73,13 @@ const renderTranscript = () => {
     return div;
   });
   els.transcript.replaceChildren(...lines);
-  els.transcript.scrollTop = els.transcript.scrollHeight;
+
+  const scroller = document.scrollingElement;
+  if (scroller) {
+    scroller.scrollTop = scroller.scrollHeight;
+  } else {
+    els.transcript.scrollTop = els.transcript.scrollHeight;
+  }
 };
 
 const addLine = (role, text) => {

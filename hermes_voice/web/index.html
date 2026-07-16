@@ -6,20 +6,28 @@
   <title>Hermes Voice</title>
   <style>
     :root { color-scheme: dark; }
-    html, body { height: 100%; }
-    body {
-      margin: 0; min-height: 100%; display: flex; flex-direction: column;
-      align-items: center; overflow: hidden;
-      background: #101014; color: #e8e8ec;
-      font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    #app-header {
-      position: sticky; top: 0; z-index: 10; box-sizing: border-box;
-      width: 100%; display: flex; flex-direction: column; align-items: center;
-      gap: 0.75rem; padding: 1rem;
-      background: rgba(16, 16, 20, 0.96); border-bottom: 1px solid #26262e;
-      backdrop-filter: blur(12px);
-    }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0; min-height: 100%; display: flex; flex-direction: column;
+    align-items: center; overflow-x: hidden; overflow-y: auto;
+    background: #101014; color: #e8e8ec;
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  #app-header {
+    box-sizing: border-box;
+    width: 100%; display: flex; flex-direction: column; align-items: center;
+    gap: 0.75rem; padding: 1rem;
+    background: #101014; border-bottom: 1px solid #26262e;
+  }
+
+  #voice-actions {
+    position: sticky; top: 0; z-index: 10; box-sizing: border-box;
+    width: 100%; display: flex; justify-content: center;
+    gap: 0.5rem; padding: 0.65rem 1rem;
+    background: rgba(16, 16, 20, 0.96);
+    border-bottom: 1px solid #26262e;
+    backdrop-filter: blur(12px);
+  }
     h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.04em; margin: 0; }
     #controls, #topic-controls {
       width: min(760px, 100%); display: flex; gap: 0.5rem; align-items: center;
@@ -47,12 +55,11 @@
     #state[data-state="listening"] { background: #123524; color: #7ee2a8; }
     #state[data-state="speaking"] { background: #1c2a4a; color: #8ab4ff; }
     #state[data-state="waiting"] { background: #3a2e14; color: #ffd479; }
-    #transcript {
-      box-sizing: border-box; width: min(680px, calc(100% - 2rem));
-      flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex;
-      flex-direction: column; gap: 0.5rem; padding: 1rem 0 2rem;
-      overscroll-behavior: contain;
-    }
+  #transcript {
+    box-sizing: border-box; width: min(680px, calc(100% - 2rem));
+    flex: 1 0 auto; min-height: 50vh; overflow: visible; display: flex;
+    flex-direction: column; gap: 0.5rem; padding: 1rem 0 2rem;
+  }
     .line { padding: 0.5rem 0.9rem; border-radius: 12px; max-width: 85%; white-space: pre-wrap; }
     .line.user { align-self: flex-end; background: #2b3a55; }
     .line.agent { align-self: flex-start; background: #22222a; }
@@ -61,13 +68,13 @@
 <body>
   <header id="app-header">
     <h1>HERMES VOICE</h1>
+
     <div id="controls">
       <select id="chat" aria-label="Telegram chat" disabled></select>
       <button id="start">Start</button>
-      <button id="mute" disabled>Mute</button>
-      <button id="stop-speaking" disabled>Stop Speech</button>
       <span id="state" data-state="idle">idle</span>
     </div>
+
     <div id="topic-controls">
       <input
         id="topic-search"
@@ -80,14 +87,27 @@
         <option value="">Start voice to load topics</option>
       </select>
       <button id="refresh-topics" disabled>Refresh</button>
-      <label id="immersion-control" title="Show the latest consecutive user and Hermes message groups">
+      <label
+        id="immersion-control"
+        title="Show the latest consecutive user and Hermes message groups"
+      >
         <input id="immersion" type="checkbox">
         Immersion
       </label>
       <span id="topic-status" role="status">not connected</span>
     </div>
   </header>
+
+  <div id="voice-actions" aria-label="Active voice controls">
+    <button id="mute" disabled>Mute</button>
+    <button id="stop-speaking" disabled>Stop Speech</button>
+  </div>
+
   <main id="transcript" aria-live="polite"></main>
-  <script type="module" src="/static/main.js?v=20260714-tts-cutoff-fix1"></script>
+
+  <script
+    type="module"
+    src="/static/main.js?v=20260716-sticky-voice-controls1"
+  ></script>
 </body>
 </html>
