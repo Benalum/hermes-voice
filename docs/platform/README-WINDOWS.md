@@ -1,6 +1,12 @@
 
 # Fresh install — Windows 10/11 x64
 
+
+> [!NOTE]
+> Windows has passed automated clean-install, test, and real
+> speech-model validation on GitHub-hosted runners. Complete validation
+> on physical user-owned Windows hardware is still pending.
+
 Native Windows is a candidate platform using Faster-Whisper and portable Kokoro. Do not call a Windows machine
 fully supported until both the clean `windows-2025` workflow and the physical real-machine test pass.
 

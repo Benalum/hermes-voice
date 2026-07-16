@@ -5,18 +5,23 @@ This directory contains fresh-install guides for the operating system running th
 
 ## Current support matrix
 
-| Platform | Speech backend | Clean-runner workflow | Real-machine evidence |
-|---|---|---|---|
-| Ubuntu 24.04 x64 | portable | `ubuntu-24.04` | Passed on the Hermes Ubuntu host: full tests, live Telegram, Kokoro playback, Stop Speech, and Tailscale Serve |
-| macOS 15 Apple Silicon | MLX | `macos-15` arm64 | Must be run on a physical Apple Silicon Mac before marking hardware audio passed |
-| macOS 15 Intel | portable | `macos-15-intel` x64 | Must be run on a physical Intel Mac before marking hardware audio passed |
-| Windows 10/11 x64 | portable | `windows-2025` x64 | Native path is candidate support until clean CI and a physical Windows test both pass |
+| Platform | Speech backend | Automated result | Physical-machine result | Status |
+|---|---|---|---|---|
+| Ubuntu 24.04 x64 | Portable | Clean install and real-model CI passed | Confirmed on the Hermes Ubuntu host | Supported |
+| macOS 15 Apple Silicon | MLX | Clean install and real-model CI passed | Pending | CI validated |
+| macOS 15 Intel | Portable | Clean install passed; real-model reliability remains under investigation | Pending | Experimental |
+| Windows 10/11 x64 | Portable | Clean install and real-model CI passed | Pending | CI validated |
 
-A green GitHub Actions job proves that a new hosted virtual machine can install the locked dependency
-set, select the correct backend, import the platform adapters, and pass the model-free test suite. It does
-not prove microphone permission, speaker output, Telegram credentials, Tailscale login, or model performance
-on a specific physical computer.
+A green GitHub Actions job proves that a new hosted virtual machine can
+install the locked dependency set, select the correct backend, import the
+platform adapters, and complete the automated checks.
 
+It does not prove microphone permission, audible speaker output, Telegram
+credentials, Tailscale login, operating-system startup behavior, or model
+performance on a particular physical computer.
+
+See [VALIDATION-STATUS.md](VALIDATION-STATUS.md) for the dated validation
+record.
 ## Guides
 
 - [Ubuntu 24.04 / Linux](README-UBUNTU-LINUX.md)

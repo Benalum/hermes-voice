@@ -1,6 +1,13 @@
 
 # Fresh install — macOS Apple Silicon
 
+
+> [!NOTE]
+> Apple Silicon macOS has passed automated clean-install, test, and real
+> MLX speech-model validation on GitHub-hosted runners. Complete
+> validation on physical user-owned Apple Silicon hardware is still
+> pending.
+
 Supported architecture: `arm64`. This path uses Parakeet MLX and Kokoro MLX.
 
 ## 1. Confirm architecture and install prerequisites

@@ -18,6 +18,27 @@ browser microphone
 → browser speaker
 ```
 
+## Platform support
+
+Support status reflects the strongest validation completed for each platform.
+
+| Platform | Installation and tests | Real speech-model CI | Physical-machine validation | Status |
+|---|---|---|---|---|
+| Ubuntu 24.04 x64 | Passed | Passed | Confirmed | Supported |
+| Windows 10/11 x64 | Passed | Passed | Pending | CI validated |
+| macOS 15 Apple Silicon | Passed | Passed | Pending | CI validated |
+| macOS 15 Intel | Passed | Under investigation | Pending | Experimental |
+
+### Validation terminology
+
+- **Supported:** Automated validation passed and the application was exercised on physical hardware.
+- **CI validated:** Installation, tests, and real-model checks passed on GitHub-hosted runners, but complete physical-machine testing is still pending.
+- **Experimental:** Installation and automated tests may pass, but one or more important runtime paths remain unresolved.
+
+GitHub-hosted validation does not replace testing with a physical microphone, speakers, browser permissions, Telegram, Tailscale, operating-system service management, and startup after reboot.
+
+See [the detailed platform validation record](docs/platform/VALIDATION-STATUS.md).
+
 ## Platform guides
 
 Use the guide matching the machine that will run the Hermes Voice gateway:

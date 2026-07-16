@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """Static checks that platform documentation matches the current repository."""
 
@@ -12,6 +11,7 @@ PLATFORM = ROOT / "docs" / "platform"
 FILES = (
     ROOT / "README.md",
     PLATFORM / "README.md",
+    PLATFORM / "VALIDATION-STATUS.md",
     PLATFORM / "README-UBUNTU-LINUX.md",
     PLATFORM / "README-MACOS-APPLE-SILICON.md",
     PLATFORM / "README-MACOS-INTEL.md",
@@ -40,9 +40,7 @@ def main() -> int:
         for link in re.findall(r"\[[^\]]+\]\(([^)]+\.md)\)", text):
             target = (path.parent / link).resolve()
             if not target.is_file():
-                errors.append(
-                    f"{path.relative_to(ROOT)} links to missing file: {link}"
-                )
+                errors.append(f"{path.relative_to(ROOT)} links to missing file: {link}")
 
     required_snippets = {
         PLATFORM / "README-UBUNTU-LINUX.md": "uv sync --locked --extra speech --group dev",

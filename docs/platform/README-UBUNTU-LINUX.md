@@ -1,6 +1,14 @@
 
 # Fresh install — Ubuntu 24.04 x64
 
+
+> [!NOTE]
+> Ubuntu 24.04 x64 has passed automated clean-install, test, and real
+> speech-model validation. It has also been exercised on a physical
+> Hermes Voice deployment. Hardware-specific microphone, speaker,
+> browser, Telegram, Tailscale, and service behavior should still be
+> verified on each installation.
+
 This is the primary verified deployment path. Other Linux distributions may require different package names.
 
 ## 1. Install operating-system packages

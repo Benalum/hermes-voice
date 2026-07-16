@@ -1,5 +1,27 @@
-
 # Fresh install — macOS Intel
+
+> [!WARNING]
+>
+> ## Experimental Intel macOS support
+>
+> Intel macOS currently passes dependency installation, platform verification, documentation validation, unit tests, Ruff, Mypy, JavaScript syntax checks, and launch-agent rendering in CI.
+>
+> The complete portable speech-model loop is not yet considered reliable. Earlier testing exposed a duplicate OpenMP runtime conflict between Intel macOS speech dependencies. The startup crash has been mitigated through an isolated Faster-Whisper worker and an Intel-specific CTranslate2 compatibility version, but end-to-end speech inference still requires additional validation.
+>
+> Do not treat Intel macOS as production-ready yet. Expect slower CPU-only inference and possible model startup or transcription stalls.
+>
+> Intel macOS should be considered supported only after all of the following succeed on physical hardware:
+>
+> 1. Faster-Whisper model warmup
+> 2. Microphone capture and transcription
+> 3. Telegram response round trip
+> 4. Kokoro speech generation and browser playback
+> 5. Stop Speech and barge-in behavior
+> 6. Tailscale HTTPS access from another device
+> 7. LaunchAgent startup after login or reboot
+> 8. Extended operation without worker stalls or resource leaks
+>
+> Apple Silicon macOS is the recommended Mac platform.
 
 Supported architecture: `x86_64`. This path uses Faster-Whisper and portable Kokoro, not MLX.
 
