@@ -10,7 +10,7 @@ import struct
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, IO
+from typing import IO, Any
 
 import numpy as np
 
