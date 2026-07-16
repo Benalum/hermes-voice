@@ -13,12 +13,21 @@ from typing import Any, BinaryIO
 _FRAME_HEADER = struct.Struct("!I")
 _MAX_FRAME_BYTES = 256 * 1024 * 1024
 _INTEL_MAC_CTRANSLATE2_VERSION = "4.3.1"
+_INTEL_MAC_CPU_THREADS = 1
+
+
+def _is_intel_mac() -> bool:
+    return sys.platform == "darwin" and platform.machine().lower() == "x86_64"
+
+
+def _ctranslate2_cpu_threads() -> int:
+    """Use a conservative CPU configuration on Intel macOS."""
+    return _INTEL_MAC_CPU_THREADS if _is_intel_mac() else 0
 
 
 def _validate_ctranslate2_runtime() -> None:
     """Reject Intel macOS CTranslate2 wheels with the known OpenMP conflict."""
-    is_intel_mac = sys.platform == "darwin" and platform.machine().lower() == "x86_64"
-    if not is_intel_mac:
+    if not _is_intel_mac():
         return
 
     try:
@@ -108,6 +117,8 @@ def main() -> int:
             args.model_id,
             device=args.device,
             compute_type=args.compute_type,
+            cpu_threads=_ctranslate2_cpu_threads(),
+            num_workers=1,
         )
     except Exception as exc:
         _write_response(stdout, status="error", message=f"{type(exc).__name__}: {exc}")

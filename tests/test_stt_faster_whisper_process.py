@@ -197,3 +197,35 @@ def test_worker_allows_current_ctranslate2_elsewhere(
     )
 
     worker_module._validate_ctranslate2_runtime()
+
+
+def test_worker_uses_one_cpu_thread_on_intel_macos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hermes_voice.io import stt_faster_whisper_worker as worker_module
+
+    monkeypatch.setattr(worker_module.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        worker_module.platform,
+        "machine",
+        lambda: "x86_64",
+    )
+
+    assert worker_module._is_intel_mac()
+    assert worker_module._ctranslate2_cpu_threads() == 1
+
+
+def test_worker_preserves_default_cpu_threads_elsewhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hermes_voice.io import stt_faster_whisper_worker as worker_module
+
+    monkeypatch.setattr(worker_module.sys, "platform", "linux")
+    monkeypatch.setattr(
+        worker_module.platform,
+        "machine",
+        lambda: "x86_64",
+    )
+
+    assert not worker_module._is_intel_mac()
+    assert worker_module._ctranslate2_cpu_threads() == 0
