@@ -5,6 +5,7 @@ import contextlib
 import json
 from typing import Any
 
+import pytest
 from starlette.testclient import TestClient
 
 from hermes_voice.server.app import create_app
@@ -140,6 +141,9 @@ class TopicResponder:
     async def load_topic_history(self, topic_id: int, *, limit: int) -> tuple[str, ...]:
         return (f"{topic_id}:{limit}",)
 
+    async def close(self) -> None:
+        return None
+
 
 class TestOrchestratorTopicControls:
     async def test_topic_controls_wait_for_initial_reset_and_dispatch_chat_switch(self) -> None:
@@ -183,3 +187,61 @@ async def _ignore_text(_text: str) -> None:
 
 async def _ignore_bytes(_data: bytes) -> None:
     return None
+
+
+class FailingResetResponder:
+    def __init__(self, _emit: Any) -> None:
+        self.close_calls = 0
+
+    async def reset(self, _chat_key: str) -> None:
+        raise RuntimeError("reset failed")
+
+    async def send(self, _text: str) -> None:
+        return None
+
+    async def close(self) -> None:
+        self.close_calls += 1
+
+
+class TestOrchestratorLifecycle:
+    async def test_initial_reset_failure_closes_responder(self) -> None:
+        from hermes_voice.server.orchestrator import Orchestrator
+
+        holder: dict[str, FailingResetResponder] = {}
+
+        def make_responder(emit: Any) -> FailingResetResponder:
+            responder = FailingResetResponder(emit)
+            holder["responder"] = responder
+            return responder
+
+        orchestrator = Orchestrator(
+            send_text=_ignore_text,
+            send_bytes=_ignore_bytes,
+            vad=FakeVad(),
+            stt=FakeStt(),
+            tts=FakeTts(),
+            make_responder=make_responder,
+            initial_chat="hermes",
+        )
+
+        with pytest.raises(RuntimeError, match="reset failed"):
+            await orchestrator.run()
+
+        assert holder["responder"].close_calls == 1
+
+    def test_websocket_reports_orchestrator_startup_failure(self) -> None:
+        app = create_app(
+            mode="parrot",
+            vad=FakeVad(),
+            stt=FakeStt(),
+            tts=FakeTts(),
+            make_responder=FailingResetResponder,
+        )
+
+        with TestClient(app).websocket_connect("/ws") as ws:
+            ws.send_text('{"type": "hello", "token": ""}')
+            assert json.loads(ws.receive_text())["type"] == "ready"
+            assert json.loads(ws.receive_text()) == {
+                "type": "error",
+                "message": "voice session failed",
+            }

@@ -64,7 +64,7 @@ class TelegramRelay:
         self._active_topic_id: int | None = None
         self._entity: Any = None
         self._ticker: asyncio.Task[None] | None = None
-        self._handlers_installed = False
+        self._handlers: list[tuple[Callable[..., Any], Any]] = []
 
     @property
     def active_topic_id(self) -> int | None:
@@ -174,22 +174,52 @@ class TelegramRelay:
         message = await self._client.send_message(self._entity, text, **kwargs)
         self._aggregator.anchor(message_id=message.id, now=self._clock())
 
-    def close(self) -> None:
-        if self._ticker is not None:
-            self._ticker.cancel()
-            self._ticker = None
+    async def close(self) -> None:
+        ticker = self._ticker
+        self._ticker = None
+
+        if ticker is not None:
+            ticker.cancel()
+            try:
+                await ticker
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("Telegram ticker failed during shutdown")
+
+        handlers = tuple(self._handlers)
+        self._handlers.clear()
+
+        for callback, event_filter in handlers:
+            try:
+                self._client.remove_event_handler(
+                    callback,
+                    event_filter,
+                )
+            except Exception:
+                logger.exception("Failed to remove Telegram event handler")
+
+        self._aggregator.reset()
+        self._active_chat = None
+        self._active_peer_id = None
+        self._active_topic_id = None
+        self._entity = None
 
     # --- Telethon event handlers ---
 
     def _install_handlers(self) -> None:
-        if self._handlers_installed:
+        if self._handlers:
             return
         from telethon import events
 
-        self._client.add_event_handler(self._on_new_message, events.NewMessage(incoming=True))
-        self._client.add_event_handler(self._on_edited, events.MessageEdited())
-        self._client.add_event_handler(self._on_user_update, events.UserUpdate())
-        self._handlers_installed = True
+        handlers = [
+            (self._on_new_message, events.NewMessage(incoming=True)),
+            (self._on_edited, events.MessageEdited()),
+            (self._on_user_update, events.UserUpdate()),
+        ]
+        for callback, event_filter in handlers:
+            self._client.add_event_handler(callback, event_filter)
+        self._handlers.extend(handlers)
 
     def _is_active_destination(self, chat_id: int | None, message: Any) -> bool:
         if self._active_peer_id is None or chat_id != self._active_peer_id:
@@ -244,9 +274,7 @@ class TelegramRelay:
 
 def _validate_limit(limit: int) -> None:
     if not 1 <= limit <= MAX_TELEGRAM_PAGE_SIZE:
-        raise ValueError(
-            f"limit must be between 1 and {MAX_TELEGRAM_PAGE_SIZE}, inclusive"
-        )
+        raise ValueError(f"limit must be between 1 and {MAX_TELEGRAM_PAGE_SIZE}, inclusive")
 
 
 def _topic_from_telegram(item: Any) -> TelegramTopic | None:

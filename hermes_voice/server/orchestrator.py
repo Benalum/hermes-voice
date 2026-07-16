@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import logging
 from collections import deque
 from collections.abc import Awaitable, Callable, Mapping
@@ -73,6 +74,8 @@ class Orchestrator:
         self._turns = TurnManager(config.turn)
         self._events: asyncio.Queue[tuple[sm.Event, asyncio.Future[None] | None]] = asyncio.Queue()
         self._ready = asyncio.Event()
+        self._stopped = asyncio.Event()
+        self._failure: Exception | None = None
         self._epoch = 1
         self._speech_texts: deque[str] = deque()
         self._tts_task: asyncio.Task[None] | None = None
@@ -83,23 +86,28 @@ class Orchestrator:
     # --- inputs ---
 
     def emit(self, event: sm.Event) -> None:
-        self._events.put_nowait((event, None))
+        if not self._stopped.is_set():
+            self._events.put_nowait((event, None))
 
     async def dispatch(self, event: sm.Event) -> None:
         """Process a control event and wait for all of its effects to finish."""
+        await self._wait_until_ready()
+        self._raise_if_stopped()
         future = asyncio.get_running_loop().create_future()
         self._events.put_nowait((event, future))
         await future
 
     async def list_topics(self, *, query: str = "", limit: int = 100) -> tuple[Any, ...]:
-        await self._ready.wait()
+        await self._wait_until_ready()
+        self._raise_if_stopped()
         method = getattr(self._responder, "list_topics", None)
         if not callable(method):
             raise RuntimeError("the active responder does not support Telegram topics")
         return tuple(await method(query=query, limit=limit))
 
     async def select_topic(self, topic_id: int) -> None:
-        await self._ready.wait()
+        await self._wait_until_ready()
+        self._raise_if_stopped()
         method = getattr(self._responder, "select_topic", None)
         if not callable(method):
             raise RuntimeError("the active responder does not support Telegram topics")
@@ -111,7 +119,8 @@ class Orchestrator:
         *,
         limit: int = 50,
     ) -> tuple[Any, ...]:
-        await self._ready.wait()
+        await self._wait_until_ready()
+        self._raise_if_stopped()
         method = getattr(self._responder, "load_topic_history", None)
         if not callable(method):
             raise RuntimeError("the active responder does not support Telegram topics")
@@ -137,9 +146,9 @@ class Orchestrator:
     # --- main loop ---
 
     async def run(self) -> None:
-        await self._responder.reset(self._session.chat_key or "")
-        self._ready.set()
         try:
+            await self._responder.reset(self._session.chat_key or "")
+            self._ready.set()
             while True:
                 event, future = await self._events.get()
                 try:
@@ -152,8 +161,15 @@ class Orchestrator:
                 else:
                     if future is not None and not future.done():
                         future.set_result(None)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._failure = exc
+            raise
         finally:
-            self._shutdown()
+            self._stopped.set()
+            self._fail_pending_dispatches()
+            await self._shutdown()
 
     async def _handle(self, event: sm.Event) -> None:
         before = self._session
@@ -251,8 +267,11 @@ class Orchestrator:
             await self._send(SpeakStop(epoch=epoch, flush=False))
             self.emit(sm.TtsFinished())
         finally:
-            if next_pcm is not None and not next_pcm.done():
-                next_pcm.cancel()
+            if next_pcm is not None:
+                if not next_pcm.done():
+                    next_pcm.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await next_pcm
 
     async def _synthesize_safely(self, text: str) -> bytes:
         try:
@@ -308,13 +327,71 @@ class Orchestrator:
         self._side_tasks.add(task)
         task.add_done_callback(self._side_tasks.discard)
 
-    def _shutdown(self) -> None:
-        for task in (self._tts_task, self._wait_timer, *self._side_tasks):
-            if task is not None and not task.done():
-                task.cancel()
+    async def _wait_until_ready(self) -> None:
+        if self._ready.is_set():
+            return
+        self._raise_if_stopped()
+
+        ready_wait = asyncio.create_task(self._ready.wait())
+        stopped_wait = asyncio.create_task(self._stopped.wait())
+        try:
+            await asyncio.wait(
+                {ready_wait, stopped_wait},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        finally:
+            for task in (ready_wait, stopped_wait):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(
+                ready_wait,
+                stopped_wait,
+                return_exceptions=True,
+            )
+
+        if not self._ready.is_set():
+            self._raise_if_stopped()
+
+    def _raise_if_stopped(self) -> None:
+        if not self._stopped.is_set():
+            return
+        error = RuntimeError("orchestrator is not running")
+        if self._failure is not None:
+            raise error from self._failure
+        raise error
+
+    def _fail_pending_dispatches(self) -> None:
+        while True:
+            try:
+                _event, future = self._events.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            if future is not None and not future.done():
+                future.set_exception(RuntimeError("orchestrator stopped"))
+
+    async def _shutdown(self) -> None:
+        tasks = {
+            task
+            for task in (self._tts_task, self._wait_timer, *self._side_tasks)
+            if task is not None and not task.done()
+        }
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        self._tts_task = None
+        self._wait_timer = None
+        self._side_tasks.clear()
+
         close = getattr(self._responder, "close", None)
         if callable(close):
-            close()
+            try:
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                logger.exception("responder close failed")
 
 
 class ParrotResponder:
@@ -328,4 +405,7 @@ class ParrotResponder:
         self._emit(sm.TurnSettled())
 
     async def reset(self, chat_key: str) -> None:
+        return None
+
+    async def close(self) -> None:
         return None

@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
+import logging
 import math
 import os
 import secrets
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, MutableMapping
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +56,8 @@ from hermes_voice.server.orchestrator import (
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 _ALLOWED_MODES = frozenset({"telegram", "parrot", "echo"})
 DEFAULT_HELLO_TIMEOUT_S = 10.0
+
+logger = logging.getLogger(__name__)
 
 MakeResponder = Callable[[Callable[[sm.Event], None]], ResponderPort]
 
@@ -169,9 +173,37 @@ async def _run_voice_session(
         config=orchestrator_config,
     )
     run_task = asyncio.create_task(orchestrator.run())
+    receive_task: asyncio.Task[MutableMapping[str, Any]] | None = None
     try:
         while True:
-            event = await ws.receive()
+            receive_task = asyncio.create_task(ws.receive())
+            done, _pending = await asyncio.wait(
+                {receive_task, run_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if run_task in done:
+                if not receive_task.done():
+                    receive_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await receive_task
+                receive_task = None
+                try:
+                    await run_task
+                except asyncio.CancelledError:
+                    return
+                except Exception:
+                    logger.exception("voice orchestrator failed")
+                    with contextlib.suppress(Exception):
+                        await ws.send_text(
+                            encode_server_msg(ErrorMsg(message="voice session failed"))
+                        )
+                    with contextlib.suppress(Exception):
+                        await ws.close(code=1011)
+                return
+
+            event = receive_task.result()
+            receive_task = None
             if event["type"] == "websocket.disconnect":
                 return
             pcm = event.get("bytes")
@@ -221,8 +253,13 @@ async def _run_voice_session(
             except (RuntimeError, ValueError) as exc:
                 await ws.send_text(encode_server_msg(ErrorMsg(message=str(exc))))
     finally:
-        run_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
+        if receive_task is not None and not receive_task.done():
+            receive_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await receive_task
+        if not run_task.done():
+            run_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await run_task
 
 
@@ -287,31 +324,45 @@ def create_app(
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         client = None
-        if telegram:
-            assert resolved_config is not None
-            client = telegram_client or await _connect_telegram(resolved_config)
-            app.state.tg_client = client
-            health["telegram"] = "connected"
-        if resolved_mode != "echo":
-            health["models"] = "loading"
-            if speech_ports["vad"] is None:
-                speech_ports["vad"], speech_ports["stt"], speech_ports["tts"] = (
-                    _build_speech_ports()
-                )
-            for port in (speech_ports["stt"], speech_ports["tts"]):
-                warmup = getattr(port, "warmup", None)
-                if callable(warmup):
-                    await warmup()
-            health["models"] = "warm"
+        owns_telegram_client = False
         try:
+            if telegram:
+                assert resolved_config is not None
+                if telegram_client is None:
+                    client = await _connect_telegram(resolved_config)
+                    owns_telegram_client = True
+                else:
+                    client = telegram_client
+                app.state.tg_client = client
+                health["telegram"] = "connected"
+
+            if resolved_mode != "echo":
+                health["models"] = "loading"
+                if speech_ports["vad"] is None:
+                    speech_ports["vad"], speech_ports["stt"], speech_ports["tts"] = (
+                        _build_speech_ports()
+                    )
+                for port in (speech_ports["stt"], speech_ports["tts"]):
+                    warmup = getattr(port, "warmup", None)
+                    if callable(warmup):
+                        await warmup()
+                health["models"] = "warm"
+
             yield
         finally:
-            for port in speech_ports.values():
+            for name, port in speech_ports.items():
                 close = getattr(port, "close", None)
-                if callable(close):
-                    close()
-            if client is not None and telegram_client is None:
-                await client.disconnect()
+                if not callable(close):
+                    continue
+                try:
+                    result = close()
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception:
+                    logger.exception("failed to close %s speech port", name)
+
+            if client is not None and owns_telegram_client:
+                await _disconnect_telegram_quietly(client)
 
     app = FastAPI(lifespan=lifespan)
 
