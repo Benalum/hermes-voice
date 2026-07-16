@@ -56,10 +56,30 @@ from hermes_voice.server.orchestrator import (
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 _ALLOWED_MODES = frozenset({"telegram", "parrot", "echo"})
 DEFAULT_HELLO_TIMEOUT_S = 10.0
+VOICE_SESSION_BUSY_CLOSE_CODE = 1013
+VOICE_SESSION_BUSY_MESSAGE = "voice session already active"
 
 logger = logging.getLogger(__name__)
 
 MakeResponder = Callable[[Callable[[sm.Event], None]], ResponderPort]
+
+
+class _VoiceSessionGate:
+    """Allow at most one active stateful voice session per application."""
+
+    def __init__(self) -> None:
+        self._lock = asyncio.Lock()
+        self._active = False
+
+    async def acquire(self) -> bool:
+        async with self._lock:
+            if self._active:
+                return False
+            self._active = True
+            return True
+
+    def release(self) -> None:
+        self._active = False
 
 
 def _build_speech_ports() -> tuple[VadPort, SttPort, TtsPort]:
@@ -319,6 +339,7 @@ def create_app(
     resolved_config = validate_config(config or load_config()) if telegram else None
 
     speech_ports: dict[str, Any] = {"vad": vad, "stt": stt, "tts": tts}
+    voice_session_gate = _VoiceSessionGate()
     health = {"models": "n/a", "telegram": "n/a"}
 
     @contextlib.asynccontextmanager
@@ -414,12 +435,22 @@ def create_app(
             is None
         ):
             return
-        make_responder, initial_chat, orch_config, ready = session_setup()
-        await ws.send_text(encode_server_msg(ready))
-        try:
-            if resolved_mode == "echo":
+        if resolved_mode == "echo":
+            await ws.send_text(encode_server_msg(Ready(chats=(), active_chat=None)))
+            try:
                 await _run_echo_session(ws)
+            except WebSocketDisconnect:
                 return
+            return
+
+        if not await voice_session_gate.acquire():
+            await ws.send_text(encode_server_msg(ErrorMsg(message=VOICE_SESSION_BUSY_MESSAGE)))
+            await ws.close(code=VOICE_SESSION_BUSY_CLOSE_CODE)
+            return
+
+        try:
+            make_responder, initial_chat, orch_config, ready = session_setup()
+            await ws.send_text(encode_server_msg(ready))
             await _run_voice_session(
                 ws,
                 vad=speech_ports["vad"],
@@ -431,6 +462,8 @@ def create_app(
             )
         except WebSocketDisconnect:
             return
+        finally:
+            voice_session_gate.release()
 
     app.mount("/static", StaticFiles(directory=_WEB_DIR), name="static")
     return app
