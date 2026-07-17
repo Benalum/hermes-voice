@@ -213,18 +213,18 @@ class Orchestrator:
                 embedding = await asyncio.to_thread(self._speaker_gate.embed, pcm)
                 if embedding is not None:
                     accepted, score, speaker = self._speaker_gate.verify(embedding)
+                    logger.warning(
+                        "speaker_gate: decision accepted=%s score=%.4f "
+                        "threshold=%.4f speaker=%s duration_s=%.3f",
+                        accepted,
+                        score,
+                        self._speaker_gate._config.threshold,
+                        speaker,
+                        len(pcm) / (16000 * 2),
+                    )
                     if not accepted:
-                        logger.info(
-                            "speaker_gate: REJECTED (score=%.3f < %.3f, speakers=%s)",
-                            score,
-                            self._speaker_gate._config.threshold,
-                            self._speaker_gate.enrolled_names,
-                        )
                         self.emit(sm.SttCompleted(text=""))
                         return
-                    logger.info(
-                        "speaker_gate: accepted (score=%.3f, speaker=%s)", score, speaker
-                    )
             except Exception:
                 logger.exception("speaker_gate: verification error (failing open)")
         try:
