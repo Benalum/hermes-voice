@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import math
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from hermes_voice.kit.speaker_gate import SpeakerGateConfig
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +47,7 @@ class Config:
     token: str
     telegram: TelegramConfig
     chats: dict[str, ChatConfig]
+    speaker_gate: SpeakerGateConfig = field(default_factory=SpeakerGateConfig)
 
 
 def _require_gateway_token(value: Any) -> str:
@@ -247,5 +250,6 @@ def load_config(path: Path | None = None) -> Config:
             token=_require_gateway_token(raw.get("token")),
             telegram=telegram,
             chats=chats,
+            speaker_gate=SpeakerGateConfig.from_section(raw.get("speaker_gate")),
         )
     )

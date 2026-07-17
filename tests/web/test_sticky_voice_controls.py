@@ -41,14 +41,18 @@ def test_only_voice_action_strip_is_sticky() -> None:
     assert "top: 0" in voice_actions
 
 
-def test_mute_and_stop_are_outside_main_header_controls() -> None:
+def test_voice_status_mute_and_stop_are_in_sticky_strip() -> None:
     controls = _html_element("controls")
     voice_actions = _html_element("voice-actions")
 
     assert 'id="start"' in controls
+    assert 'id="state"' not in controls
     assert 'id="mute"' not in controls
     assert 'id="stop-speaking"' not in controls
 
+    assert 'id="state"' in voice_actions
+    assert 'role="status"' in voice_actions
+    assert 'aria-live="polite"' in voice_actions
     assert 'id="mute"' in voice_actions
     assert 'id="stop-speaking"' in voice_actions
 

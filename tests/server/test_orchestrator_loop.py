@@ -108,6 +108,50 @@ class TestParrotLoop:
         assert not any(c["type"] in ("transcript", "agent_text", "speak_start") for c in controls)
         assert audio == []
 
+    def test_spoken_mute_suppresses_until_spoken_unmute(self) -> None:
+        client, stt = open_session(stt_text="Mute me")
+        with client.websocket_connect("/ws") as ws:
+            ws.send_text('{"type": "hello", "token": ""}')
+            ws.receive_text()
+
+            drive_utterance(ws)
+            muted_controls, _ = collect_until_listening(ws)
+            assert any(
+                c.get("type") == "transcript"
+                and c.get("role") == "system"
+                and c.get("text") == "Voice muted"
+                for c in muted_controls
+            )
+            assert not any(c.get("role") == "user" for c in muted_controls)
+            assert not any(c["type"] == "agent_text" for c in muted_controls)
+
+            stt.text = "This private speech must not reach Telegram"
+            drive_utterance(ws)
+            private_controls, _ = collect_until_listening(ws)
+            assert not any(c.get("role") == "user" for c in private_controls)
+            assert not any(c["type"] == "agent_text" for c in private_controls)
+
+            stt.text = "Start listening"
+            drive_utterance(ws)
+            unmuted_controls, _ = collect_until_listening(ws)
+            assert any(
+                c.get("type") == "transcript"
+                and c.get("role") == "system"
+                and c.get("text") == "Voice unmuted"
+                for c in unmuted_controls
+            )
+
+            stt.text = "Hello again"
+            drive_utterance(ws)
+            resumed_controls, _ = collect_until_listening(ws)
+            assert any(
+                c.get("type") == "transcript"
+                and c.get("role") == "user"
+                and c.get("text") == "Hello again"
+                for c in resumed_controls
+            )
+            assert any(c["type"] == "agent_text" for c in resumed_controls)
+
     def test_state_progression_covers_full_loop(self) -> None:
         client, _ = open_session()
         with client.websocket_connect("/ws") as ws:
@@ -245,3 +289,71 @@ class TestOrchestratorLifecycle:
                 "type": "error",
                 "message": "voice session failed",
             }
+
+
+class _RecordingStt:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def transcribe(self, pcm: bytes) -> str:
+        self.calls += 1
+        return "should never happen"
+
+
+class TestSpeakerGateIntegration:
+    async def test_rejected_utterance_never_reaches_stt(self, tmp_path) -> None:
+        import numpy as np
+        from hermes_voice.kit import session as sm
+        from hermes_voice.kit.speaker_gate import SpeakerGate, SpeakerGateConfig
+        from hermes_voice.server.orchestrator import Orchestrator
+
+        # Real gate; verify() is monkeypatched to always reject.
+        gate = SpeakerGate(
+            SpeakerGateConfig(enabled=True, threshold=0.75, store=tmp_path / "sp.json")
+        )
+        gate.enroll("alex", np.zeros(256, dtype=np.float32))  # make is_configured True
+        gate.verify = lambda emb: (False, 0.1, None)  # type: ignore[method-assign]
+        gate.embed = staticmethod(lambda pcm: np.zeros(256, dtype=np.float32))  # type: ignore[method-assign]
+
+        stt = _RecordingStt()
+
+        orchestrator = Orchestrator(
+            send_text=_ignore_text,
+            send_bytes=_ignore_bytes,
+            vad=FakeVad(),
+            stt=stt,
+            tts=FakeTts(),
+            make_responder=lambda e: _IgnoreResponder(),
+            initial_chat="hermes",
+            speaker_gate=gate,
+        )
+        task = asyncio.create_task(orchestrator.run())
+        try:
+            # Simulate a completed utterance arriving from VAD.
+            await orchestrator.dispatch(sm.SpeechEnded(pcm=b"\x01\x00" * 8000))
+            # Give the transcribe coroutine time to run (and be rejected).
+            for _ in range(20):
+                await asyncio.sleep(0.01)
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+        assert stt.calls == 0, "STT must not be called for a rejected speaker"
+
+
+class _IgnoreResponder:
+    async def reset(self, chat_key: str) -> None:
+        return None
+
+    async def send(self, text: str) -> None:
+        return None
+
+    def list_topics(self, *, query: str = "", limit: int = 100):
+        return ()
+
+    async def select_topic(self, topic_id: int) -> None:
+        return None
+
+    async def load_topic_history(self, topic_id: int, *, limit: int = 50):
+        return ()

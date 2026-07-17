@@ -17,6 +17,8 @@ from typing import Any
 from hermes_voice.kit import session as sm
 from hermes_voice.kit.normalize import normalize_for_speech
 from hermes_voice.kit.ports import ResponderPort, SttPort, TtsPort, VadPort
+from hermes_voice.kit.speaker_gate import SpeakerGate
+from hermes_voice.kit.voice_mute import VoiceMuteControl
 from hermes_voice.kit.protocol import (
     AgentText,
     ServerMsg,
@@ -62,6 +64,7 @@ class Orchestrator:
         make_responder: Callable[[Callable[[sm.Event], None]], ResponderPort],
         initial_chat: str,
         config: OrchestratorConfig | None = None,
+        speaker_gate: "SpeakerGate | None" = None,
     ) -> None:
         config = config or OrchestratorConfig()
         self._send_text = send_text
@@ -69,6 +72,8 @@ class Orchestrator:
         self._vad = vad
         self._stt = stt
         self._tts = tts
+        self._speaker_gate = speaker_gate
+        self._voice_mute = VoiceMuteControl()
         self._config = config
         self._session = sm.Session(state=sm.State.LISTENING, turn_open=False, chat_key=initial_chat)
         self._turns = TurnManager(config.turn)
@@ -201,11 +206,43 @@ class Orchestrator:
     # --- effect implementations ---
 
     async def _transcribe(self, pcm: bytes) -> None:
+        # Speaker gate: drop utterances that are not from an enrolled voice
+        # before they reach STT. Runs in a worker thread (resemblyzer is sync).
+        if self._speaker_gate is not None and self._speaker_gate.is_configured:
+            try:
+                embedding = await asyncio.to_thread(self._speaker_gate.embed, pcm)
+                if embedding is not None:
+                    accepted, score, speaker = self._speaker_gate.verify(embedding)
+                    if not accepted:
+                        logger.info(
+                            "speaker_gate: REJECTED (score=%.3f < %.3f, speakers=%s)",
+                            score,
+                            self._speaker_gate._config.threshold,
+                            self._speaker_gate.enrolled_names,
+                        )
+                        self.emit(sm.SttCompleted(text=""))
+                        return
+                    logger.info(
+                        "speaker_gate: accepted (score=%.3f, speaker=%s)", score, speaker
+                    )
+            except Exception:
+                logger.exception("speaker_gate: verification error (failing open)")
         try:
             text = await self._stt.transcribe(pcm)
         except Exception:
             logger.exception("STT failed")
             text = ""
+
+        mute_result = self._voice_mute.handle(text)
+        if not mute_result.forward:
+            if mute_result.status == "muted":
+                await self._send(Transcript(role="system", text="Voice muted", final=True))
+                logger.info("voice control: muted; subsequent speech stays local")
+            elif mute_result.status == "unmuted":
+                await self._send(Transcript(role="system", text="Voice unmuted", final=True))
+                logger.info("voice control: unmuted")
+            self.emit(sm.SttCompleted(text=""))
+            return
         self.emit(sm.SttCompleted(text=text))
 
     async def _relay_send(self, text: str) -> None:

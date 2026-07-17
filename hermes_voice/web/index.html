@@ -23,6 +23,7 @@
   #voice-actions {
     position: sticky; top: 0; z-index: 10; box-sizing: border-box;
     width: 100%; display: flex; justify-content: center;
+    align-items: center; flex-wrap: wrap;
     gap: 0.5rem; padding: 0.65rem 1rem;
     background: rgba(16, 16, 20, 0.96);
     border-bottom: 1px solid #26262e;
@@ -50,9 +51,10 @@
     #immersion-control input { margin: 0; accent-color: #8ab4ff; }
     #state {
       padding: 0.25rem 0.9rem; border-radius: 999px; font-size: 0.85rem;
-      background: #26262e; text-transform: lowercase;
+      background: #26262e; text-transform: capitalize;
     }
     #state[data-state="listening"] { background: #123524; color: #7ee2a8; }
+    #state[data-state="transcribing"] { background: #3a2418; color: #ffb77a; }
     #state[data-state="speaking"] { background: #1c2a4a; color: #8ab4ff; }
     #state[data-state="waiting"] { background: #3a2e14; color: #ffd479; }
   #transcript {
@@ -72,7 +74,6 @@
     <div id="controls">
       <select id="chat" aria-label="Telegram chat" disabled></select>
       <button id="start">Start</button>
-      <span id="state" data-state="idle">idle</span>
     </div>
 
     <div id="topic-controls">
@@ -98,7 +99,14 @@
     </div>
   </header>
 
-  <div id="voice-actions" aria-label="Active voice controls">
+  <div id="voice-actions" aria-label="Active voice controls and status">
+    <span
+      id="state"
+      data-state="idle"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >Idle</span>
     <button id="mute" disabled>Mute</button>
     <button id="stop-speaking" disabled>Stop Speech</button>
   </div>
