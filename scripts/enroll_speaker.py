@@ -17,7 +17,6 @@ The store path matches the [speaker_gate] config (default
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -26,7 +25,7 @@ import numpy as np
 # Run from the repo root so the package import works.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hermes_voice.kit.speaker_gate import SpeakerGate, SpeakerGateConfig  # noqa: E402
+from hermes_voice.kit.speaker_gate import SpeakerGate, SpeakerGateConfig
 
 
 def _read_wav(path: Path, *, store: Path) -> bytes:
@@ -34,7 +33,7 @@ def _read_wav(path: Path, *, store: Path) -> bytes:
     try:
         import soundfile as sf
     except ImportError:
-        raise SystemExit("soundfile is required to read WAV: uv pip install soundfile")
+        raise SystemExit("soundfile is required to read WAV: uv pip install soundfile") from None
     data, sr = sf.read(str(path), dtype="float32", always_2d=False)
     if data.ndim > 1:
         data = data[:, 0]
@@ -50,9 +49,7 @@ def _record(seconds: float, *, store: Path) -> bytes:
     try:
         import sounddevice as sd
     except ImportError:
-        raise SystemExit(
-            "sounddevice is required to record: uv pip install sounddevice"
-        )
+        raise SystemExit("sounddevice is required to record: uv pip install sounddevice") from None
     print(f"Recording {seconds:g}s of audio for enrollment... speak now.")
     audio = sd.rec(int(seconds * 16000), samplerate=16000, channels=1, dtype="int16")
     sd.wait()
@@ -82,7 +79,11 @@ def main() -> None:
     if not args.wav and not args.record:
         parser.error("provide --wav PATH or --record SECONDS")
 
-    pcm = _read_wav(args.wav, store=args.store) if args.wav else _record(args.record, store=args.store)
+    pcm = (
+        _read_wav(args.wav, store=args.store)
+        if args.wav
+        else _record(args.record, store=args.store)
+    )
     if len(pcm) < 8000:
         raise SystemExit("clip too short (< 0.5s); use a longer sample")
 
