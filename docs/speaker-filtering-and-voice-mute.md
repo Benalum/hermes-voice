@@ -147,6 +147,8 @@ changes the state. The browser button follows the same rules:
 - The server acknowledges the state and the button changes to **Unmute**.
 - Saying “Hermes unmute me” can unmute a session that was muted by the button.
 - Clicking **Unmute** can unmute a session that was muted by voice.
+- Saying “Hermes mute me” during a reply mutes the session without stopping that
+  reply; command recognition is resolved before a pending barge-in is applied.
 - Muted speech never triggers barge-in or stops reply playback. Once unmuted,
   speaking during playback can interrupt it normally.
 
