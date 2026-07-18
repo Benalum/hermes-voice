@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import numpy as np
+from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
@@ -83,12 +84,12 @@ class SpeakerGate:
     def __init__(self, config: SpeakerGateConfig) -> None:
         self._config = config
         self._lock = threading.Lock()
-        self._speakers: dict[str, list[np.ndarray]] = {}
+        self._speakers: dict[str, list[NDArray[np.float32]]] = {}
         if config.enabled:
             self._load()
 
     # --- enrollment -----------------------------------------------------
-    def enroll(self, name: str, embedding: np.ndarray) -> None:
+    def enroll(self, name: str, embedding: NDArray[np.float32]) -> None:
         with self._lock:
             self._speakers.setdefault(name, []).append(embedding.astype(np.float32))
         self._save()
@@ -103,7 +104,10 @@ class SpeakerGate:
         return self._config.enabled and bool(self.enrolled_names)
 
     # --- verification ---------------------------------------------------
-    def verify(self, embedding: np.ndarray) -> tuple[bool, float, str | None]:
+    def verify(
+        self,
+        embedding: NDArray[np.float32],
+    ) -> tuple[bool, float, str | None]:
         """Return (accepted, best_score, best_speaker).
 
         If the gate is disabled or has no enrolled speakers, returns
@@ -127,7 +131,7 @@ class SpeakerGate:
 
     # --- embedding ------------------------------------------------------
     @staticmethod
-    def embed(pcm_16k_int16: bytes) -> np.ndarray | None:
+    def embed(pcm_16k_int16: bytes) -> NDArray[np.float32] | None:
         """Embed raw 16 kHz int16 mono PCM. Returns None on failure."""
         enc = _get_encoder()
         if enc is None:
