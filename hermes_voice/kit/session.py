@@ -50,6 +50,11 @@ class BargedIn:
 
 
 @dataclass(frozen=True)
+class BargeInTranscribed:
+    text: str
+
+
+@dataclass(frozen=True)
 class SttCompleted:
     text: str
 
@@ -84,6 +89,7 @@ Event = (
     ChatSelected
     | SpeechEnded
     | BargedIn
+    | BargeInTranscribed
     | SttCompleted
     | AgentSpeakable
     | TurnSettled
@@ -185,6 +191,18 @@ def advance(session: Session, event: Event) -> _Result:
             return replace(session, state=next_state), ()
         case BargedIn() if session.state is State.SPEAKING:
             return replace(session, state=State.LISTENING), (StopSpeaking(),)
+        case BargeInTranscribed(text=text) if text.strip() and session.state in (
+            State.LISTENING,
+            State.WAITING,
+            State.SPEAKING,
+        ):
+            barge_effects: tuple[Effect, ...] = (
+                SendTranscript(text=text),
+                RelaySend(text=text),
+            )
+            if session.state is State.SPEAKING:
+                barge_effects = (StopSpeaking(), *barge_effects)
+            return replace(session, state=State.WAITING, turn_open=True), barge_effects
         case CancelPressed() if session.state is State.SPEAKING:
             next_state = State.WAITING if session.turn_open else State.LISTENING
             return replace(session, state=next_state), (StopSpeaking(),)
