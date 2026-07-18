@@ -462,6 +462,7 @@ async function handleAudioFrame(buffer, connection) {
 function resetConnectionUi() {
   muted = false;
   els.mute.textContent = "Mute";
+  els.mute.setAttribute("aria-pressed", "false");
   topicMode = false;
   resetTopicUi();
   setState("idle");
