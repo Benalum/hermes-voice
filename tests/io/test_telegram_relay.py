@@ -1,5 +1,6 @@
 """Relay wiring tests with a fake Telethon client - no network, no session."""
 
+import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
@@ -24,7 +25,7 @@ CHATS = {
 
 class FakeClient:
     def __init__(self) -> None:
-        self.handlers: list[tuple[Any, str]] = []
+        self.handlers: list[tuple[Any, Any]] = []
         self.sent: list[tuple[Any, str, int | None]] = []
         self.entities = {"@hermes_bot": types.User(id=111), 222: types.User(id=222)}
         self.next_message_id = 10
@@ -109,7 +110,19 @@ class FakeClient:
         }
 
     def add_event_handler(self, callback: Any, event_filter: Any) -> None:
-        self.handlers.append((callback, type(event_filter).__name__))
+        self.handlers.append((callback, event_filter))
+
+    def remove_event_handler(self, callback: Any, event_filter: Any = None) -> int:
+        before = len(self.handlers)
+        self.handlers = [
+            (registered_callback, registered_filter)
+            for registered_callback, registered_filter in self.handlers
+            if not (
+                registered_callback == callback
+                and (event_filter is None or registered_filter is event_filter)
+            )
+        ]
+        return before - len(self.handlers)
 
     async def get_entity(self, peer: Any) -> Any:
         return self.entities[peer]
@@ -124,9 +137,7 @@ class FakeClient:
         if request_name == "GetForumTopicsRequest":
             query = request.q.casefold()
             topics = [
-                topic
-                for topic in self.topics
-                if not query or query in topic.title.casefold()
+                topic for topic in self.topics if not query or query in topic.title.casefold()
             ]
             return SimpleNamespace(topics=topics[: request.limit])
 
@@ -181,8 +192,8 @@ class FakeClient:
                 reply_to=reply_to,
             ),
         )
-        for callback, name in self.handlers:
-            if name == "NewMessage":
+        for callback, event_filter in tuple(self.handlers):
+            if type(event_filter).__name__ == "NewMessage":
                 await callback(event)
 
 
@@ -467,7 +478,64 @@ class TestTelegramRelay:
         await relay.send("still hermes")
         assert client.sent[-1] == (client.entities["@hermes_bot"], "still hermes", 98)
 
-    async def test_close_stops_the_ticker(self) -> None:
-        relay, _, _, _ = make_relay()
+    async def test_close_stops_ticker_and_removes_handlers(self) -> None:
+        relay, client, _, _ = make_relay()
         await relay.reset("hermes")
-        relay.close()
+        ticker = relay._ticker
+
+        assert len(client.handlers) == 3
+        assert ticker is not None
+
+        await relay.close()
+
+        assert client.handlers == []
+        assert relay._ticker is None
+        assert ticker.done()
+
+        await relay.close()
+        assert client.handlers == []
+
+    async def test_repeated_sessions_restore_handler_count_to_baseline(self) -> None:
+        client = FakeClient()
+
+        for _ in range(3):
+            relay = TelegramRelay(
+                client=client,
+                chats=CHATS,
+                emit=lambda _event: None,
+            )
+            await relay.reset("hermes")
+            assert len(client.handlers) == 3
+            await relay.close()
+            assert client.handlers == []
+
+
+class TestTelegramRelayCleanupFailures:
+    async def test_failed_ticker_does_not_prevent_handler_removal(
+        self,
+    ) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+
+        original_ticker = relay._ticker
+        assert original_ticker is not None
+
+        original_ticker.cancel()
+        await asyncio.gather(
+            original_ticker,
+            return_exceptions=True,
+        )
+
+        async def failing_ticker() -> None:
+            raise RuntimeError("ticker failure")
+
+        failed_ticker = asyncio.create_task(failing_ticker())
+        await asyncio.sleep(0)
+
+        assert failed_ticker.done()
+        relay._ticker = failed_ticker
+
+        await relay.close()
+
+        assert client.handlers == []
+        assert relay._ticker is None

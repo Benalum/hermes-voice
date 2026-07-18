@@ -1,98 +1,151 @@
-# hermes-voice
 
-Realtime voice conversations with your Hermes agents on Telegram. Speak from a
-browser on any device; a gateway on the Mac Studio does everything locally:
+# Hermes Voice
 
-```
-browser mic ──WS──▶ silero VAD ─▶ parakeet STT ─▶ Telegram (as you, via Telethon)
-browser spk ◀─WS── Kokoro TTS ◀─ reply settling ◀─ agent's reply in the chat
-```
+Hermes Voice is a private browser-based voice gateway for Hermes Agent conversations on Telegram.
+The browser captures and plays audio; the host running Hermes Voice performs VAD, speech-to-text,
+Telegram relay, and text-to-speech locally.
 
-History stays 100% in Telegram - the gateway just types what you say into the
-chosen chat and reads the agent's answer back. Agents need zero changes and can
-run anywhere. Barge-in supported: speak over the voice to interrupt it.
-
-## Setup (once)
-
-1. **Install** (Python 3.12 via [uv](https://docs.astral.sh/uv/)):
-
-   ```sh
-   uv sync --extra speech
-   ```
-
-2. **Configure.** Get `api_id`/`api_hash` at <https://my.telegram.org/apps>, then:
-
-   ```sh
-   mkdir -m 700 -p ~/.hermes-voice
-   cp config.example.toml ~/.hermes-voice/config.toml
-   chmod 600 ~/.hermes-voice/config.toml
-   $EDITOR ~/.hermes-voice/config.toml   # api creds, token, one [chats.*] per agent
-   ```
-
-3. **Log in to Telegram** (interactive: phone code + optional 2FA):
-
-   ```sh
-   uv run python -m hermes_voice.scripts.login
-   ```
-
-4. **Expose over Tailscale** (HTTPS is required for browser mic access):
-
-   ```sh
-   tailscale serve --bg https / http://127.0.0.1:8990
-   ```
-
-5. **Run as a service:**
-
-   ```sh
-   mkdir -p ~/Library/Logs/hermes-voice
-   cp launchd/com.stephen.hermes-voice.plist ~/Library/LaunchAgents/
-   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.stephen.hermes-voice.plist
-   ```
-
-   First start loads + warms all three models; `curl localhost:8990/healthz`
-   shows `{"models": "warm", "telegram": "connected"}` when ready.
-
-Open `https://<mac-studio>.<tailnet>.ts.net/` from the laptop or phone, enter
-the token from your config when prompted, pick a chat, press Start, talk.
-
-## Dev modes
-
-```sh
-HV_MODE=parrot uv run uvicorn hermes_voice.server.app:create_app --factory --port 8990
+```text
+browser microphone
+→ WebSocket
+→ Silero VAD
+→ platform speech-to-text
+→ Telegram topic
+→ Hermes Agent
+→ Telegram reply
+→ platform text-to-speech
+→ WebSocket
+→ browser speaker
 ```
 
-- `telegram` (default): the real thing
-- `parrot`: local loop, speaks your words back - no Telegram needed
-- `echo`: raw PCM echo, transport debugging
+## Platform support
 
-## Tests
+Support status reflects the strongest validation completed for each platform.
 
-```sh
-uv run pytest                  # pure + wiring tests (fast, no models/network)
-uv run pytest -m models        # real MLX model checks (downloads on first run)
-uv run pytest -m telegram      # live checks against your logged-in session
-uv run python tests/e2e/verify.py   # full loop against a running gateway
-uv run mypy && uv run ruff check .
+| Platform | Installation and tests | Real speech-model CI | Physical-machine validation | Status |
+|---|---|---|---|---|
+| Ubuntu 24.04 x64 | Passed | Passed | Confirmed | Supported |
+| Windows 10/11 x64 | Passed | Passed | Pending | CI validated |
+| macOS 15 Apple Silicon | Passed | Passed | Pending | CI validated |
+| macOS 15 Intel | Passed | Under investigation | Pending | Experimental |
+
+### Validation terminology
+
+- **Supported:** Automated validation passed and the application was exercised on physical hardware.
+- **CI validated:** Installation, tests, and real-model checks passed on GitHub-hosted runners, but complete physical-machine testing is still pending.
+- **Experimental:** Installation and automated tests may pass, but one or more important runtime paths remain unresolved.
+
+GitHub-hosted validation does not replace testing with a physical microphone, speakers, browser permissions, Telegram, Tailscale, operating-system service management, and startup after reboot.
+
+See [the detailed platform validation record](docs/platform/VALIDATION-STATUS.md).
+
+## Platform guides
+
+Use the guide matching the machine that will run the Hermes Voice gateway:
+
+- [Ubuntu 24.04 / Linux](docs/platform/README-UBUNTU-LINUX.md)
+- [macOS on Apple Silicon](docs/platform/README-MACOS-APPLE-SILICON.md)
+- [macOS on Intel](docs/platform/README-MACOS-INTEL.md)
+- [Windows 10/11 x64](docs/platform/README-WINDOWS.md)
+- [Platform support and test status](docs/platform/README.md)
+
+Do not combine commands from different platform guides.
+
+## Speech backend selection
+
+| Host | Backend selected by `HV_SPEECH_BACKEND=auto` |
+|---|---|
+| macOS Apple Silicon | Parakeet MLX STT + Kokoro MLX TTS |
+| Ubuntu/Linux x64 | Faster-Whisper STT + portable Kokoro TTS |
+| macOS Intel | Faster-Whisper STT + portable Kokoro TTS |
+| Windows x64 | Faster-Whisper STT + portable Kokoro TTS |
+
+## Fast development check
+
+Install Python 3.12 and dependencies using `uv`, then run the model-free suite:
+
+```bash
+uv sync --locked --extra speech --group dev
+uv run pytest -q
+uv run ruff check .
+uv run mypy --no-incremental hermes_voice
+node --check hermes_voice/web/main.js
 ```
 
-## Layout
+Start a local, credential-free parrot session:
 
-- `hermes_voice/kit/` - pure, fully-tested logic: WS protocol, turn detection
-  (VAD probabilities → speech start/end/barge-in), session state machine,
-  reply settling (multi-message / edit-streaming / typing-hold), text
-  normalization and sentence chunking for TTS
-- `hermes_voice/io/` - adapters: silero-vad, parakeet-mlx, Kokoro (mlx-audio),
-  Telethon relay
-- `hermes_voice/server/` - FastAPI shell, orchestrator (interprets the pure
-  machine's effects), config
-- `hermes_voice/web/` - vanilla-JS client with mic/player AudioWorklets
+```bash
+HV_MODE=parrot uv run uvicorn hermes_voice.server.app:create_app \
+  --factory --host 127.0.0.1 --port 8990
+```
 
-## Notes
+On PowerShell:
 
-- The Telethon session file (`~/.hermes-voice/*.session`) can read and send as
-  your entire Telegram account. It stays chmod 600, the server binds
-  127.0.0.1 (tailnet-only via `tailscale serve`; never use `funnel`), and the
-  gateway can only send to chats allowlisted in the config.
-- Messages an agent edits *after* they've been spoken are not re-spoken (v1).
-- `mlx-audio <= 0.4.4` has a Kokoro vocoder length bug; a contained patch in
-  `hermes_voice/io/tts_kokoro.py` works around it.
+```powershell
+$env:HV_MODE = "parrot"
+uv run uvicorn hermes_voice.server.app:create_app --factory --host 127.0.0.1 --port 8990
+```
+
+Open `http://127.0.0.1:8990/` and press **Start**.
+
+## Speaker filtering and command mute
+
+Hermes Voice can optionally reject utterances that do not match an enrolled
+speaker before speech-to-text runs. It also supports synchronized browser and
+spoken command mute controls. Say **“Hermes mute me”** to suppress ordinary
+transcripts at the server, then **“Hermes unmute me”** to resume forwarding.
+
+Command mute deliberately keeps the browser microphone stream connected so the
+server can recognize an unmute command locally. Muted speech is not relayed to
+Telegram or the agent, and neither a spoken mute command nor later muted speech
+interrupts reply playback. Use the
+operating system or browser microphone control when no audio may leave the
+device at all.
+
+See [Speaker filtering and voice mute](docs/speaker-filtering-and-voice-mute.md)
+for installation, enrollment, calibration, privacy behavior, and troubleshooting.
+
+## Automated platform verification
+
+The repository includes:
+
+- `.github/workflows/platform-clean-install.yml` for clean GitHub-hosted runners;
+- `scripts/verify_platform.py` for dependency/backend/static validation;
+- `scripts/run_real_machine_test.py` for real-model loop testing on actual hardware;
+- `scripts/verify_readmes.py` to prevent documentation drift.
+
+Run the local platform probe:
+
+```bash
+uv run python scripts/verify_platform.py
+```
+
+Run the real-model test on a physical machine after the speech models have permission to download:
+
+```bash
+uv run python scripts/run_real_machine_test.py
+```
+
+The real-model test validates the platform backend, VAD, STT, TTS, Uvicorn, WebSocket protocol,
+and return to the listening state. A final browser microphone/speaker checklist remains manual because
+CI cannot prove physical hardware permissions or audible output.
+
+## Private browser hosting with Tailscale
+
+Keep Hermes Voice bound to `127.0.0.1:8990`. Configure or verify a private HTTPS route with:
+
+```bash
+uv run python -m hermes_voice.scripts.configure_tailscale_serve
+```
+
+The configurator reuses an existing matching route and refuses to replace another service unless
+replacement is explicitly requested. It uses Tailscale Serve, never Funnel.
+
+## Security
+
+- Never commit `~/.hermes-voice/config.toml` or Telegram `.session` files.
+- Keep the gateway bound to loopback.
+- Use Tailscale Serve or an SSH tunnel for remote browser access.
+- Treat the Hermes Voice gateway token, Telegram API hash, BotFather token, and Telethon session as secrets.
+- Treat speaker enrollment WAVs and `speakers.json` as sensitive voice data; never commit them.
+- `HV_MAX_SPOKEN_CHARS=0` disables character truncation; use a positive limit when unbounded speech is undesirable.

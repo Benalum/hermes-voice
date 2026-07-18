@@ -19,14 +19,24 @@ async def test_stt_blank_audio_returns_blank_without_loading_model() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stt_discards_incomplete_final_pcm_byte() -> None:
+async def test_stt_discards_incomplete_final_pcm_byte(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "hermes_voice.io.stt_faster_whisper._needs_process_isolation",
+        lambda: False,
+    )
+
     stt = FasterWhisperStt()
     stt._transcribe_sync = MagicMock(return_value="hello")  # type: ignore[method-assign]
 
-    result = await stt.transcribe(b"\x00\x00\x01")
+    try:
+        result = await stt.transcribe(b"\x00\x00\x01")
 
-    assert result == "hello"
-    stt._transcribe_sync.assert_called_once_with(b"\x00\x00")
+        assert result == "hello"
+        stt._transcribe_sync.assert_called_once_with(b"\x00\x00")
+    finally:
+        stt.close()
 
 
 @pytest.mark.asyncio

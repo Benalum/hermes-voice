@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import logging
 from collections import deque
 from collections.abc import Awaitable, Callable, Mapping
@@ -18,6 +19,7 @@ from hermes_voice.kit.normalize import normalize_for_speech
 from hermes_voice.kit.ports import ResponderPort, SttPort, TtsPort, VadPort
 from hermes_voice.kit.protocol import (
     AgentText,
+    MuteState,
     ServerMsg,
     SpeakStart,
     SpeakStop,
@@ -26,7 +28,9 @@ from hermes_voice.kit.protocol import (
     encode_audio_frame,
     encode_server_msg,
 )
+from hermes_voice.kit.speaker_gate import SpeakerGate
 from hermes_voice.kit.turns import BargeIn, SpeechEnd, SpeechStart, TurnConfig, TurnManager
+from hermes_voice.kit.voice_mute import VoiceMuteControl
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +65,7 @@ class Orchestrator:
         make_responder: Callable[[Callable[[sm.Event], None]], ResponderPort],
         initial_chat: str,
         config: OrchestratorConfig | None = None,
+        speaker_gate: SpeakerGate | None = None,
     ) -> None:
         config = config or OrchestratorConfig()
         self._send_text = send_text
@@ -68,13 +73,19 @@ class Orchestrator:
         self._vad = vad
         self._stt = stt
         self._tts = tts
+        self._speaker_gate = speaker_gate
+        self._voice_mute = VoiceMuteControl()
+        self._mute_lock = asyncio.Lock()
         self._config = config
         self._session = sm.Session(state=sm.State.LISTENING, turn_open=False, chat_key=initial_chat)
         self._turns = TurnManager(config.turn)
         self._events: asyncio.Queue[tuple[sm.Event, asyncio.Future[None] | None]] = asyncio.Queue()
         self._ready = asyncio.Event()
+        self._stopped = asyncio.Event()
+        self._failure: Exception | None = None
         self._epoch = 1
         self._speech_texts: deque[str] = deque()
+        self._pending_barge_in = False
         self._tts_task: asyncio.Task[None] | None = None
         self._wait_timer: asyncio.Task[None] | None = None
         self._side_tasks: set[asyncio.Task[None]] = set()
@@ -83,23 +94,38 @@ class Orchestrator:
     # --- inputs ---
 
     def emit(self, event: sm.Event) -> None:
-        self._events.put_nowait((event, None))
+        if not self._stopped.is_set():
+            self._events.put_nowait((event, None))
 
     async def dispatch(self, event: sm.Event) -> None:
         """Process a control event and wait for all of its effects to finish."""
+        await self._wait_until_ready()
+        self._raise_if_stopped()
         future = asyncio.get_running_loop().create_future()
         self._events.put_nowait((event, future))
         await future
 
+    async def set_muted(self, on: bool, *, source: str = "button") -> None:
+        """Set command-only mute and acknowledge the authoritative state."""
+        await self._wait_until_ready()
+        self._raise_if_stopped()
+        async with self._mute_lock:
+            self._voice_mute.set_muted(on)
+            muted = self._voice_mute.muted
+        await self._send(MuteState(on=muted, source=source))
+        logger.warning("voice control: %s by %s", "muted" if muted else "unmuted", source)
+
     async def list_topics(self, *, query: str = "", limit: int = 100) -> tuple[Any, ...]:
-        await self._ready.wait()
+        await self._wait_until_ready()
+        self._raise_if_stopped()
         method = getattr(self._responder, "list_topics", None)
         if not callable(method):
             raise RuntimeError("the active responder does not support Telegram topics")
         return tuple(await method(query=query, limit=limit))
 
     async def select_topic(self, topic_id: int) -> None:
-        await self._ready.wait()
+        await self._wait_until_ready()
+        self._raise_if_stopped()
         method = getattr(self._responder, "select_topic", None)
         if not callable(method):
             raise RuntimeError("the active responder does not support Telegram topics")
@@ -111,7 +137,8 @@ class Orchestrator:
         *,
         limit: int = 50,
     ) -> tuple[Any, ...]:
-        await self._ready.wait()
+        await self._wait_until_ready()
+        self._raise_if_stopped()
         method = getattr(self._responder, "load_topic_history", None)
         if not callable(method):
             raise RuntimeError("the active responder does not support Telegram topics")
@@ -119,27 +146,37 @@ class Orchestrator:
 
     def feed_audio(self, pcm: bytes) -> None:
         prob = self._vad.probability(pcm)
+        muted = self._voice_mute.muted
         speaking = self._session.state is sm.State.SPEAKING
-        for turn_event in self._turns.feed(pcm, prob, speaking=speaking):
+        detect_barge_in = speaking and not muted
+        for turn_event in self._turns.feed(pcm, prob, speaking=detect_barge_in):
             match turn_event:
+                case SpeechEnd(pcm=utterance) if self._pending_barge_in:
+                    self._pending_barge_in = False
+                    self._spawn(self._transcribe(utterance, barge_in=True))
+                case SpeechEnd(pcm=utterance) if muted and speaking:
+                    # Command mute still listens for an unmute command, but muted
+                    # speech must never interrupt audio that is already playing.
+                    self._spawn(self._transcribe(utterance, command_only=True))
                 case SpeechEnd(pcm=utterance):
                     self.emit(sm.SpeechEnded(pcm=utterance))
                 case BargeIn():
+                    self._pending_barge_in = True
                     logger.info(
-                        "barge-in detected while speaking (threshold=%.2f, frames=%d)",
+                        "barge-in candidate detected while speaking (threshold=%.2f, frames=%d)",
                         self._config.turn.barge_threshold,
                         self._config.turn.barge_frames,
                     )
-                    self.emit(sm.BargedIn())
                 case SpeechStart():
                     pass
 
     # --- main loop ---
 
     async def run(self) -> None:
-        await self._responder.reset(self._session.chat_key or "")
-        self._ready.set()
         try:
+            await self._responder.reset(self._session.chat_key or "")
+            await self._send(MuteState(on=self._voice_mute.muted, source="session"))
+            self._ready.set()
             while True:
                 event, future = await self._events.get()
                 try:
@@ -152,8 +189,15 @@ class Orchestrator:
                 else:
                     if future is not None and not future.done():
                         future.set_result(None)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._failure = exc
+            raise
         finally:
-            self._shutdown()
+            self._stopped.set()
+            self._fail_pending_dispatches()
+            await self._shutdown()
 
     async def _handle(self, event: sm.Event) -> None:
         before = self._session
@@ -184,12 +228,59 @@ class Orchestrator:
 
     # --- effect implementations ---
 
-    async def _transcribe(self, pcm: bytes) -> None:
+    async def _transcribe(
+        self,
+        pcm: bytes,
+        *,
+        command_only: bool = False,
+        barge_in: bool = False,
+    ) -> None:
+        # Speaker gate: drop utterances that are not from an enrolled voice
+        # before they reach STT. Runs in a worker thread (resemblyzer is sync).
+        if self._speaker_gate is not None and self._speaker_gate.is_configured:
+            try:
+                embedding = await asyncio.to_thread(self._speaker_gate.embed, pcm)
+                if embedding is not None:
+                    accepted, score, speaker = self._speaker_gate.verify(embedding)
+                    logger.warning(
+                        "speaker_gate: decision accepted=%s score=%.4f "
+                        "threshold=%.4f speaker=%s duration_s=%.3f",
+                        accepted,
+                        score,
+                        self._speaker_gate._config.threshold,
+                        speaker,
+                        len(pcm) / (16000 * 2),
+                    )
+                    if not accepted:
+                        if not command_only and not barge_in:
+                            self.emit(sm.SttCompleted(text=""))
+                        return
+            except Exception:
+                logger.exception("speaker_gate: verification error (failing open)")
         try:
             text = await self._stt.transcribe(pcm)
         except Exception:
             logger.exception("STT failed")
             text = ""
+
+        async with self._mute_lock:
+            mute_result = self._voice_mute.handle(text)
+            muted = self._voice_mute.muted
+        if mute_result.status is not None:
+            await self._send(MuteState(on=muted, source="voice"))
+            logger.warning(
+                "voice control: %s by spoken command",
+                "muted" if muted else "unmuted",
+            )
+        if command_only:
+            return
+        if not mute_result.forward:
+            if not barge_in:
+                self.emit(sm.SttCompleted(text=""))
+            return
+        if barge_in:
+            self.emit(sm.BargeInTranscribed(text=text))
+            return
         self.emit(sm.SttCompleted(text=text))
 
     async def _relay_send(self, text: str) -> None:
@@ -251,8 +342,11 @@ class Orchestrator:
             await self._send(SpeakStop(epoch=epoch, flush=False))
             self.emit(sm.TtsFinished())
         finally:
-            if next_pcm is not None and not next_pcm.done():
-                next_pcm.cancel()
+            if next_pcm is not None:
+                if not next_pcm.done():
+                    next_pcm.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await next_pcm
 
     async def _synthesize_safely(self, text: str) -> bytes:
         try:
@@ -308,13 +402,71 @@ class Orchestrator:
         self._side_tasks.add(task)
         task.add_done_callback(self._side_tasks.discard)
 
-    def _shutdown(self) -> None:
-        for task in (self._tts_task, self._wait_timer, *self._side_tasks):
-            if task is not None and not task.done():
-                task.cancel()
+    async def _wait_until_ready(self) -> None:
+        if self._ready.is_set():
+            return
+        self._raise_if_stopped()
+
+        ready_wait = asyncio.create_task(self._ready.wait())
+        stopped_wait = asyncio.create_task(self._stopped.wait())
+        try:
+            await asyncio.wait(
+                {ready_wait, stopped_wait},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        finally:
+            for task in (ready_wait, stopped_wait):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(
+                ready_wait,
+                stopped_wait,
+                return_exceptions=True,
+            )
+
+        if not self._ready.is_set():
+            self._raise_if_stopped()
+
+    def _raise_if_stopped(self) -> None:
+        if not self._stopped.is_set():
+            return
+        error = RuntimeError("orchestrator is not running")
+        if self._failure is not None:
+            raise error from self._failure
+        raise error
+
+    def _fail_pending_dispatches(self) -> None:
+        while True:
+            try:
+                _event, future = self._events.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            if future is not None and not future.done():
+                future.set_exception(RuntimeError("orchestrator stopped"))
+
+    async def _shutdown(self) -> None:
+        tasks = {
+            task
+            for task in (self._tts_task, self._wait_timer, *self._side_tasks)
+            if task is not None and not task.done()
+        }
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        self._tts_task = None
+        self._wait_timer = None
+        self._side_tasks.clear()
+
         close = getattr(self._responder, "close", None)
         if callable(close):
-            close()
+            try:
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                logger.exception("responder close failed")
 
 
 class ParrotResponder:
@@ -328,4 +480,7 @@ class ParrotResponder:
         self._emit(sm.TurnSettled())
 
     async def reset(self, chat_key: str) -> None:
+        return None
+
+    async def close(self) -> None:
         return None

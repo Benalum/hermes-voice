@@ -9,3 +9,10 @@ __pycache__/
 config.toml
 dist/
 .DS_Store
+
+reports/real-machine/
+
+# Local speaker-verification recordings and profiles are sensitive.
+*-enrollment.wav
+*-verification.wav
+speakers.json

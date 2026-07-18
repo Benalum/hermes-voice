@@ -1,3 +1,8 @@
+import {
+  ConnectionGuard,
+  guardConnectionCallback,
+} from "./connection_guard.mjs";
+
 const els = {
   chat: document.getElementById("chat"),
   topicSearch: document.getElementById("topic-search"),
@@ -12,15 +17,14 @@ const els = {
   transcript: document.getElementById("transcript"),
 };
 
-let ws = null;
+const connectionGuard = new ConnectionGuard();
+let activeConnection = null;
 let muted = false;
 let currentEpoch = 0;
 let playerNode = null;
 let playerCtx = null;
 let playerReady = Promise.resolve();
-let micCtx = null;
-let micNode = null;
-let micStream = null;
+let micSession = null;
 let selectedTopicId = null;
 let requestedTopicId = null;
 let topicReady = false;
@@ -69,7 +73,13 @@ const renderTranscript = () => {
     return div;
   });
   els.transcript.replaceChildren(...lines);
-  els.transcript.scrollTop = els.transcript.scrollHeight;
+
+  const scroller = document.scrollingElement;
+  if (scroller) {
+    scroller.scrollTop = scroller.scrollHeight;
+  } else {
+    els.transcript.scrollTop = els.transcript.scrollHeight;
+  }
 };
 
 const addLine = (role, text) => {
@@ -93,9 +103,16 @@ const clearTranscript = () => {
   els.transcript.replaceChildren();
 };
 
+const isCurrentConnection = (connection) => (
+  connectionGuard.isCurrent(connection)
+  && activeConnection === connection
+);
+
 const sendControl = (body) => {
-  if (ws?.readyState !== WebSocket.OPEN) return false;
-  ws.send(JSON.stringify(body));
+  const connection = activeConnection;
+  if (!isCurrentConnection(connection)) return false;
+  if (connection.socket.readyState !== WebSocket.OPEN) return false;
+  connection.socket.send(JSON.stringify(body));
   return true;
 };
 
@@ -221,56 +238,130 @@ const populateTopics = (topics) => {
   selectTopic(Number(firstAvailable.value));
 };
 
-async function ensurePlayer(sampleRate) {
-  if (playerCtx && playerCtx.sampleRate === sampleRate && playerNode) return;
-  if (playerCtx) await playerCtx.close();
-  playerCtx = new AudioContext({ sampleRate });
-  await playerCtx.audioWorklet.addModule("/static/worklets/player.js");
-  playerNode = new AudioWorkletNode(playerCtx, "player-processor");
-  playerNode.connect(playerCtx.destination);
-  await playerCtx.resume();
+async function closeAudioContext(context) {
+  if (!context || context.state === "closed") return;
+  try {
+    await context.close();
+  } catch (error) {
+    console.warn("Audio context cleanup failed", error);
+  }
 }
 
-async function stopMic() {
-  if (micNode) micNode.port.onmessage = null;
-  micNode?.disconnect();
-  micNode = null;
-  for (const track of micStream?.getTracks() ?? []) track.stop();
-  micStream = null;
-  if (micCtx) await micCtx.close();
-  micCtx = null;
-}
+async function ensurePlayer(sampleRate, connection) {
+  if (!isCurrentConnection(connection)) return false;
+  if (playerCtx && playerCtx.sampleRate === sampleRate && playerNode) return true;
 
-async function startMic() {
-  await stopMic();
-  micStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      sampleRate: 16000,
-      channelCount: 1,
-    },
-  });
-  micCtx = new AudioContext({ sampleRate: 16000 });
-  await micCtx.audioWorklet.addModule("/static/worklets/mic.js");
-  const source = micCtx.createMediaStreamSource(micStream);
-  micNode = new AudioWorkletNode(micCtx, "mic-processor");
-  source.connect(micNode);
-  micNode.port.onmessage = (event) => {
-    if (
-      (!topicMode || topicReady)
-      && !muted
-      && ws?.readyState === WebSocket.OPEN
-      && event.data.byteLength > 0
-    ) {
-      ws.send(event.data);
+  const nextContext = new AudioContext({ sampleRate });
+  let nextNode = null;
+  try {
+    await nextContext.audioWorklet.addModule("/static/worklets/player.js");
+    if (!isCurrentConnection(connection)) {
+      await closeAudioContext(nextContext);
+      return false;
     }
-  };
-  await micCtx.resume();
+
+    nextNode = new AudioWorkletNode(nextContext, "player-processor");
+    nextNode.connect(nextContext.destination);
+    await nextContext.resume();
+    if (!isCurrentConnection(connection)) {
+      nextNode.disconnect();
+      await closeAudioContext(nextContext);
+      return false;
+    }
+
+    const previousContext = playerCtx;
+    playerCtx = nextContext;
+    playerNode = nextNode;
+    if (previousContext && previousContext !== nextContext) {
+      await closeAudioContext(previousContext);
+    }
+    return true;
+  } catch (error) {
+    nextNode?.disconnect();
+    await closeAudioContext(nextContext);
+    throw error;
+  }
 }
 
-function handleControl(msg) {
+async function stopMic(connection = null) {
+  const session = micSession;
+  if (!session) return;
+  if (connection && session.connection !== connection) return;
+
+  micSession = null;
+  session.node.port.onmessage = null;
+  session.node.disconnect();
+  for (const track of session.stream.getTracks()) track.stop();
+  await closeAudioContext(session.context);
+}
+
+async function startMic(connection) {
+  await stopMic();
+
+  let stream = null;
+  let context = null;
+  let node = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 16000,
+        channelCount: 1,
+      },
+    });
+    if (!isCurrentConnection(connection)) {
+      for (const track of stream.getTracks()) track.stop();
+      return false;
+    }
+
+    context = new AudioContext({ sampleRate: 16000 });
+    await context.audioWorklet.addModule("/static/worklets/mic.js");
+    if (!isCurrentConnection(connection)) {
+      for (const track of stream.getTracks()) track.stop();
+      await closeAudioContext(context);
+      return false;
+    }
+
+    const source = context.createMediaStreamSource(stream);
+    node = new AudioWorkletNode(context, "mic-processor");
+    source.connect(node);
+    const session = { connection, context, node, stream };
+    micSession = session;
+    node.port.onmessage = guardConnectionCallback(
+      connectionGuard,
+      connection,
+      (event) => {
+        if (micSession !== session) return;
+        if (
+          (!topicMode || topicReady)
+          && connection.socket.readyState === WebSocket.OPEN
+          && event.data.byteLength > 0
+        ) {
+          connection.socket.send(event.data);
+        }
+      },
+    );
+    await context.resume();
+    if (!isCurrentConnection(connection)) {
+      await stopMic(connection);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    if (micSession?.connection === connection) {
+      await stopMic(connection);
+    } else {
+      node?.disconnect();
+      for (const track of stream?.getTracks() ?? []) track.stop();
+      await closeAudioContext(context);
+    }
+    throw error;
+  }
+}
+
+function handleControl(msg, connection) {
   switch (msg.type) {
     case "ready": {
       const options = msg.chats.map((chat) => {
@@ -318,6 +409,12 @@ function handleControl(msg) {
     case "state":
       setState(msg.name);
       break;
+    case "mute_state":
+      muted = Boolean(msg.on);
+      els.mute.textContent = muted ? "Unmute" : "Mute";
+      els.mute.setAttribute("aria-pressed", String(muted));
+      els.mute.disabled = false;
+      break;
     case "transcript":
       if (msg.final && (!topicMode || topicReady)) addLine("user", msg.text);
       break;
@@ -326,8 +423,11 @@ function handleControl(msg) {
       break;
     case "speak_start":
       currentEpoch = msg.epoch;
-      playerReady = ensurePlayer(msg.sample_rate).catch((error) => {
-        addLine("agent", `⚠ Audio output failed: ${error.message}`);
+      playerReady = ensurePlayer(msg.sample_rate, connection).catch((error) => {
+        if (isCurrentConnection(connection)) {
+          addLine("agent", `⚠ Audio output failed: ${error.message}`);
+        }
+        return false;
       });
       break;
     case "speak_stop":
@@ -349,45 +449,20 @@ function handleControl(msg) {
   }
 }
 
-async function handleAudioFrame(buffer) {
-  if (buffer.byteLength < 4) return;
+async function handleAudioFrame(buffer, connection) {
+  if (!isCurrentConnection(connection) || buffer.byteLength < 4) return;
   const view = new DataView(buffer);
   const epoch = view.getUint32(0, true);
   if (epoch !== currentEpoch) return;
   await playerReady;
-  if (!playerNode) return;
+  if (!isCurrentConnection(connection) || !playerNode) return;
   playerNode.port.postMessage(buffer.slice(4));
 }
 
-/*
-Old disconnect function
-
-async function disconnect() {
-  const socket = ws;
-  ws = null;
-  if (socket && socket.readyState < WebSocket.CLOSING) socket.close();
-  await stopMic();
-}
-*/
-
-async function disconnect() {
-  const socket = ws;
-  ws = null;
-
-  // Immediately discard any audio already queued for playback.
-  playerNode?.port.postMessage({ flush: true });
-
-  // Stop microphone delivery before closing the socket so no more
-  // audio frames can be sent while the connection is shutting down.
-  await stopMic();
-
-  if (socket && socket.readyState < WebSocket.CLOSING) {
-    socket.close(1000, "user stopped session");
-  }
-
+function resetConnectionUi() {
   muted = false;
   els.mute.textContent = "Mute";
-
+  els.mute.setAttribute("aria-pressed", "false");
   topicMode = false;
   resetTopicUi();
   setState("idle");
@@ -396,72 +471,117 @@ async function disconnect() {
   els.stopSpeaking.disabled = true;
 }
 
+async function disconnectConnection(connection, { closeSocket = true } = {}) {
+  if (!connection) return false;
+  const wasCurrent = connectionGuard.invalidate(connection);
+  if (wasCurrent && activeConnection === connection) activeConnection = null;
+
+  if (wasCurrent) playerNode?.port.postMessage({ flush: true });
+  await stopMic(connection);
+
+  if (closeSocket && connection.socket.readyState < WebSocket.CLOSING) {
+    connection.socket.close(1000, "user stopped session");
+  }
+
+  if (!wasCurrent || activeConnection !== null) return false;
+  resetConnectionUi();
+  return true;
+}
+
+async function disconnect() {
+  const connection = activeConnection;
+  if (!connection) {
+    resetConnectionUi();
+    return;
+  }
+  await disconnectConnection(connection);
+}
+
 async function connect() {
-  if (ws && ws.readyState < WebSocket.CLOSING) return;
+  const existing = activeConnection;
+  if (existing && existing.socket.readyState < WebSocket.CLOSING) return;
+
   els.start.disabled = true;
-  try {
-    await ensurePlayer(16000);
-    await startMic();
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    ws = new WebSocket(`${proto}://${location.host}/ws`);
-    ws.binaryType = "arraybuffer";
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "hello", token: localStorage.getItem("hv_token") ?? "" }));
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const socket = new WebSocket(`${proto}://${location.host}/ws`);
+  const connection = connectionGuard.activate(socket);
+  activeConnection = connection;
+  currentEpoch = 0;
+  playerNode?.port.postMessage({ flush: true });
+
+  socket.binaryType = "arraybuffer";
+  socket.onopen = guardConnectionCallback(
+    connectionGuard,
+    connection,
+    () => {
+      socket.send(JSON.stringify({
+        type: "hello",
+        token: localStorage.getItem("hv_token") ?? "",
+      }));
       els.mute.disabled = false;
       els.stopSpeaking.disabled = false;
-    };
-    ws.onmessage = (event) => {
+    },
+  );
+  socket.onmessage = guardConnectionCallback(
+    connectionGuard,
+    connection,
+    (event) => {
       if (typeof event.data === "string") {
         try {
-          handleControl(JSON.parse(event.data));
+          handleControl(JSON.parse(event.data), connection);
         } catch (error) {
-          addLine("agent", `⚠ Invalid server message: ${error.message}`);
+          if (isCurrentConnection(connection)) {
+            addLine("agent", `⚠ Invalid server message: ${error.message}`);
+          }
         }
       } else {
-        handleAudioFrame(event.data);
+        void handleAudioFrame(event.data, connection).catch((error) => {
+          if (isCurrentConnection(connection)) {
+            addLine("agent", `⚠ Audio playback failed: ${error.message}`);
+          }
+        });
       }
-    };
-    ws.onerror = () => addLine("agent", "⚠ WebSocket connection failed");
-    ws.onclose = async () => {
-      ws = null;
-      await stopMic();
-      topicMode = false;
-      resetTopicUi();
-      setState("idle");
-      els.start.disabled = false;
-      els.mute.disabled = true;
-      els.stopSpeaking.disabled = true;
-    };
+    },
+  );
+  socket.onerror = guardConnectionCallback(
+    connectionGuard,
+    connection,
+    () => addLine("agent", "⚠ WebSocket connection failed"),
+  );
+  socket.onclose = () => {
+    void disconnectConnection(connection, { closeSocket: false });
+  };
+
+  try {
+    playerReady = ensurePlayer(16000, connection);
+    await playerReady;
+    if (!isCurrentConnection(connection)) return;
+    await startMic(connection);
   } catch (error) {
-    await disconnect();
-    els.start.disabled = false;
-    throw error;
+    const disconnectedCurrent = await disconnectConnection(connection);
+    if (disconnectedCurrent) throw error;
   }
 }
 
 els.start.onclick = () => connect().catch((error) => addLine("agent", `⚠ ${error.message}`));
 els.mute.onclick = () => {
-  muted = !muted;
-  els.mute.textContent = muted ? "Unmute" : "Mute";
-  sendControl({ type: "mute", on: muted });
+  const requestedState = !muted;
+  els.mute.disabled = true;
+  if (!sendControl({ type: "mute", on: requestedState })) {
+    els.mute.disabled = false;
+  }
 };
-/*
-els.stopSpeaking.onclick = () => {
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "cancel" }));
-};
-*/
 els.stopSpeaking.onclick = () => {
   sendControl({ type: "cancel" });
 };
 els.chat.onchange = () => {
-  if (ws?.readyState !== WebSocket.OPEN) return;
+  if (!sendControl({ type: "select_chat", chat_key: els.chat.value })) return;
   clearTranscript();
   resetTopicUi("switching chat…");
   topicMode = true;
   els.topicSearch.value = "";
   els.topicSearch.disabled = false;
   els.refreshTopics.disabled = false;
-  sendControl({ type: "select_chat", chat_key: els.chat.value });
   requestTopics();
 };
 els.topic.onchange = () => {
@@ -479,6 +599,6 @@ els.immersion.onchange = () => {
   renderTranscript();
 };
 window.addEventListener("beforeunload", () => {
-  ws?.close();
-  for (const track of micStream?.getTracks() ?? []) track.stop();
+  activeConnection?.socket.close();
+  for (const track of micSession?.stream.getTracks() ?? []) track.stop();
 });

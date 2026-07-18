@@ -1,6 +1,8 @@
 # Copy to ~/.hermes-voice/config.toml and fill in. chmod 600 the file.
 
 # Shared secret the browser client must present (stored in its localStorage).
+# Generate with:
+# python -c 'import secrets; print(secrets.token_urlsafe(32))'
 token = "change-me"
 
 [telegram]
@@ -8,6 +10,14 @@ token = "change-me"
 api_id = 0
 api_hash = ""
 session_path = "~/.hermes-voice/hermes.session"
+
+# Optional local speaker verification. Install the speaker-filter extra and
+# enroll at least one sample before enabling this gate. See:
+# docs/speaker-filtering-and-voice-mute.md
+[speaker_gate]
+enabled = false
+threshold = 0.75
+store = "~/.hermes-voice/speakers.json"
 
 # One [chats.<key>] block per Hermes agent chat. Only chats listed here can be
 # voice-targeted - it is impossible to send voice transcripts anywhere else.

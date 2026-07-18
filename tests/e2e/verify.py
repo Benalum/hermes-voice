@@ -1,63 +1,60 @@
-"""End-to-end verification against a LIVE gateway.
 
-Streams a synthesized utterance into /ws exactly as the browser would and
-asserts the full loop: transcript -> (relay) -> agent text -> spoken audio ->
-back to listening.
-
-    uv run python tests/e2e/verify.py [ws://127.0.0.1:8990/ws] [token]
-
-Against a telegram-mode gateway this sends the transcribed phrase into the
-active chat, so point the first configured chat at a test bot (or Saved
-Messages) before running.
-"""
+"""End-to-end verification against a live Hermes Voice gateway."""
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
-import sys
+from pathlib import Path
 
 import numpy as np
 import websockets
 
-PHRASE = "ping"
+PHRASE = "Hermes voice platform test"
 FRAME_BYTES = 1024
 
 
 async def synthesize_utterance() -> bytes:
-    from hermes_voice.io.tts_kokoro import KokoroTts
+    from hermes_voice.io.speech_factory import detect_speech_backend
 
-    spoken24 = await KokoroTts().synthesize(PHRASE)
-    audio24 = np.frombuffer(spoken24, dtype=np.int16).astype(np.float32)
-    idx = np.arange(0, len(audio24), 1.5).astype(np.int64)
-    return audio24[idx].astype(np.int16).tobytes()
+    if detect_speech_backend() == "mlx":
+        from hermes_voice.io.tts_kokoro import KokoroTts
+
+        tts = KokoroTts()
+    else:
+        from hermes_voice.io.tts_kokoro_portable import PortableKokoroTts
+
+        tts = PortableKokoroTts()
+
+    spoken24 = await tts.synthesize(PHRASE)
+    audio24 = np.frombuffer(spoken24, dtype=np.int16)
+    indices = np.arange(0, len(audio24), 1.5).astype(np.int64)
+    return audio24[indices].astype(np.int16).tobytes()
 
 
-async def main() -> int:
-    url = sys.argv[1] if len(sys.argv) > 1 else "ws://127.0.0.1:8990/ws"
-    token = sys.argv[2] if len(sys.argv) > 2 else ""
-    audio16 = await synthesize_utterance()
-
+async def run(args: argparse.Namespace) -> int:
+    audio16 = args.pcm_file.read_bytes() if args.pcm_file else await synthesize_utterance()
     saw: dict[str, object] = {}
     audio_frames = 0
     current_epoch: int | None = None
 
-    async with websockets.connect(url, max_size=None) as ws:
-        await ws.send(json.dumps({"type": "hello", "token": token}))
+    async with websockets.connect(args.url, max_size=None) as ws:
+        await ws.send(json.dumps({"type": "hello", "token": args.token}))
         ready = json.loads(await ws.recv())
         assert ready["type"] == "ready", f"expected ready, got {ready}"
-        print(f"✓ ready (chats: {[c['key'] for c in ready['chats']] or 'parrot'})")
+        print("PASS ready")
 
-        for i in range(0, len(audio16) - FRAME_BYTES, FRAME_BYTES):
-            await ws.send(audio16[i : i + FRAME_BYTES])
+        for offset in range(0, len(audio16), FRAME_BYTES):
+            await ws.send(audio16[offset : offset + FRAME_BYTES])
         for _ in range(30):
             await ws.send(b"\x00" * FRAME_BYTES)
 
-        deadline = asyncio.get_event_loop().time() + 240
+        deadline = asyncio.get_running_loop().time() + args.timeout
         while True:
-            remaining = deadline - asyncio.get_event_loop().time()
+            remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
-                print("✗ timed out waiting for the loop to complete")
+                print("FAIL timed out")
                 return 1
             msg = await asyncio.wait_for(ws.recv(), timeout=remaining)
             if isinstance(msg, bytes):
@@ -69,27 +66,30 @@ async def main() -> int:
             kind = control["type"]
             saw[kind] = control
             if kind == "transcript":
-                print(f"✓ transcript: {control['text']!r}")
+                print(f"PASS transcript: {control['text']!r}")
             elif kind == "agent_text":
-                print(f"✓ agent replied: {control['text'][:60]!r}")
+                print(f"PASS agent text: {control['text'][:80]!r}")
             elif kind == "speak_start":
                 current_epoch = control["epoch"]
             elif kind == "state" and control["name"] == "listening" and "transcript" in saw:
                 break
 
-    ok = True
-    for required in ("transcript", "agent_text", "speak_start"):
-        if required not in saw:
-            print(f"✗ never saw {required}")
-            ok = False
-    if audio_frames < 1:
-        print("✗ no spoken audio frames received")
-        ok = False
-    if ok:
-        print(f"✓ spoken audio: {audio_frames} frame(s); session back to listening")
-        print("PASS")
-    return 0 if ok else 1
+    missing = [kind for kind in ("transcript", "agent_text", "speak_start") if kind not in saw]
+    if missing or audio_frames < 1:
+        print(f"FAIL missing={missing} audio_frames={audio_frames}")
+        return 1
+    print(f"PASS spoken audio frames={audio_frames}; returned to listening")
+    return 0
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("url", nargs="?", default="ws://127.0.0.1:8990/ws")
+    parser.add_argument("token", nargs="?", default="")
+    parser.add_argument("--pcm-file", type=Path)
+    parser.add_argument("--timeout", type=float, default=240)
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    raise SystemExit(asyncio.run(run(parse_args())))

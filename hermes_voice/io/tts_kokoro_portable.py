@@ -119,4 +119,4 @@ class PortableKokoroTts:
 
         clipped = np.clip(combined, -1.0, 1.0)
 
-        return (clipped * 32767.0).astype(np.int16).tobytes()
+        return bytes((clipped * 32767.0).astype(np.int16).tobytes())
