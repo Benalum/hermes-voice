@@ -7,6 +7,7 @@ from hermes_voice.kit.protocol import (
     Hello,
     ListTopics,
     Mute,
+    MuteState,
     ProtocolError,
     Ready,
     SelectChat,
@@ -93,6 +94,14 @@ class TestServerMessages:
         assert encode_server_msg(msg) == (
             '{"type": "ready", "chats": [{"key": "research", "label": "Research"}],'
             ' "active_chat": "research"}'
+        )
+
+    def test_encodes_authoritative_mute_state(self) -> None:
+        assert encode_server_msg(MuteState(on=True, source="voice")) == (
+            '{"type": "mute_state", "on": true, "source": "voice"}'
+        )
+        assert encode_server_msg(MuteState(on=False, source="button")) == (
+            '{"type": "mute_state", "on": false, "source": "button"}'
         )
 
     def test_encodes_topics(self) -> None:
