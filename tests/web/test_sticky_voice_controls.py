@@ -65,3 +65,15 @@ def test_page_owns_scrolling_instead_of_transcript() -> None:
     assert "overflow: visible" in transcript
     assert "overflow-y: auto" not in transcript
     assert "document.scrollingElement" in MAIN
+
+
+def test_command_mute_keeps_microphone_frames_flowing_to_server() -> None:
+    assert "&& !muted" not in MAIN
+    assert 'case "mute_state":' in MAIN
+    assert 'muted = Boolean(msg.on)' in MAIN
+
+
+def test_mute_button_waits_for_server_acknowledgement() -> None:
+    assert "const requestedState = !muted" in MAIN
+    assert 'sendControl({ type: "mute", on: requestedState })' in MAIN
+    assert 'els.mute.disabled = true' in MAIN
