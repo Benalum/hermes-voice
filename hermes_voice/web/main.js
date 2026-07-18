@@ -449,7 +449,7 @@ function handleControl(msg, connection) {
         topicReady = true;
         els.topicSearch.disabled = true;
         applyTopicSearch();
-        setTopicStatus("chat ready · no Telegram topics");
+        setTopicStatus("chat ready - no Telegram topics");
         break;
       }
       topicMode = true;

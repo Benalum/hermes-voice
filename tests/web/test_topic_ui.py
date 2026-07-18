@@ -40,7 +40,7 @@ def test_non_topic_modes_keep_the_existing_audio_path() -> None:
     assert "topicMode = options.length > 0" in MAIN
     assert "if (availableTopics.length === 0)" in MAIN
     assert "topicMode = false" in MAIN
-    assert 'setTopicStatus("chat ready · no Telegram topics")' in MAIN
+    assert 'setTopicStatus("chat ready - no Telegram topics")' in MAIN
     assert "!topicMode || topicReady" in MAIN
 
 
