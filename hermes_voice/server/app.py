@@ -13,6 +13,7 @@ import contextlib
 import inspect
 import logging
 import math
+import mimetypes
 import os
 import secrets
 from collections.abc import AsyncIterator, Callable, MutableMapping
@@ -55,6 +56,9 @@ from hermes_voice.server.orchestrator import (
 )
 
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+# Windows does not consistently register the standard JavaScript MIME type for
+# ES modules. StaticFiles consults this process-wide table when serving .mjs.
+mimetypes.add_type("text/javascript", ".mjs")
 _ALLOWED_MODES = frozenset({"telegram", "parrot", "echo"})
 DEFAULT_HELLO_TIMEOUT_S = 10.0
 VOICE_SESSION_BUSY_CLOSE_CODE = 1013
