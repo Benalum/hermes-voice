@@ -56,6 +56,12 @@ class Ready:
 
 
 @dataclass(frozen=True)
+class MuteState:
+    on: bool
+    source: str
+
+
+@dataclass(frozen=True)
 class Topics:
     items: tuple[dict[str, object], ...]
 
@@ -108,6 +114,7 @@ class ErrorMsg:
 
 ServerMsg = (
     Ready
+    | MuteState
     | Topics
     | TopicSelected
     | TopicHistory
@@ -200,6 +207,8 @@ def encode_server_msg(msg: ServerMsg) -> str:
     match msg:
         case Ready(chats=chats, active_chat=active_chat):
             body = {"type": "ready", "chats": list(chats), "active_chat": active_chat}
+        case MuteState(on=on, source=source):
+            body = {"type": "mute_state", "on": on, "source": source}
         case Topics(items=items):
             body = {"type": "topics", "topics": list(items)}
         case TopicSelected(topic_id=topic_id):
