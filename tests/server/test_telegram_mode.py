@@ -74,6 +74,11 @@ class TestTelegramTopicProtocol:
                 '{"type": "hello", "token": "test-token-abcdefghijklmnopqrstuvwxyz0123456789"}'
             )
             ws.receive_text()
+            assert json.loads(ws.receive_text()) == {
+                "type": "mute_state",
+                "on": False,
+                "source": "session",
+            }
             ws.send_text('{"type": "list_topics", "query": "system", "limit": 20}')
             reply = json.loads(ws.receive_text())
 
@@ -96,6 +101,11 @@ class TestTelegramTopicProtocol:
                 '{"type": "hello", "token": "test-token-abcdefghijklmnopqrstuvwxyz0123456789"}'
             )
             ws.receive_text()
+            assert json.loads(ws.receive_text()) == {
+                "type": "mute_state",
+                "on": False,
+                "source": "session",
+            }
             ws.send_text('{"type": "select_topic", "topic_id": 98, "history_limit": 20}')
             selected = json.loads(ws.receive_text())
             history = json.loads(ws.receive_text())
