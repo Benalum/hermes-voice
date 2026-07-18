@@ -5,10 +5,10 @@ from __future__ import annotations
 import math
 import tomllib
 from dataclasses import dataclass, field
-
-from hermes_voice.kit.speaker_gate import SpeakerGateConfig
 from pathlib import Path
 from typing import Any
+
+from hermes_voice.kit.speaker_gate import SpeakerGateConfig
 
 DEFAULT_CONFIG_PATH = Path("~/.hermes-voice/config.toml")
 DEFAULT_MAX_WAIT_S = 180.0
