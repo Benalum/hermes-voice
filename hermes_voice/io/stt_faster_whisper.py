@@ -8,10 +8,12 @@ import json
 import math
 import os
 import platform
+import queue
 import select
 import struct
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import IO, Any
@@ -123,10 +125,14 @@ def _read_frame_with_timeout(
     stream: IO[bytes],
     timeout_s: float,
 ) -> bytes:
-    deadline = time.monotonic() + _positive_timeout(
+    resolved_timeout = _positive_timeout(
         timeout_s,
         setting="worker response timeout",
     )
+    if os.name == "nt":
+        return _read_frame_with_thread_timeout(stream, resolved_timeout)
+
+    deadline = time.monotonic() + resolved_timeout
     header = _read_exact_until(
         stream,
         _FRAME_HEADER.size,
@@ -142,6 +148,33 @@ def _read_frame_with_timeout(
         size,
         deadline=deadline,
     )
+
+
+def _read_frame_with_thread_timeout(
+    stream: IO[bytes],
+    timeout_s: float,
+) -> bytes:
+    """Read a pipe with a deadline on hosts where select cannot watch pipes."""
+    outcomes: queue.Queue[bytes | BaseException] = queue.Queue(maxsize=1)
+
+    def read_frame() -> None:
+        try:
+            outcomes.put(_read_frame(stream))
+        except BaseException as exc:
+            outcomes.put(exc)
+
+    threading.Thread(
+        target=read_frame,
+        name="faster-whisper-pipe-reader",
+        daemon=True,
+    ).start()
+    try:
+        outcome = outcomes.get(timeout=timeout_s)
+    except queue.Empty:
+        raise TimeoutError("timed out waiting for Faster-Whisper worker output") from None
+    if isinstance(outcome, BaseException):
+        raise outcome
+    return outcome
 
 
 def _write_frame(stream: IO[bytes], payload: bytes) -> None:
