@@ -271,7 +271,9 @@ async def _run_voice_session(
                         )
                     case Cancel():
                         orchestrator.emit(sm.CancelPressed())
-                    case Mute() | Hello():
+                    case Mute(on=on):
+                        await orchestrator.set_muted(on, source="button")
+                    case Hello():
                         pass
             except (RuntimeError, ValueError) as exc:
                 await ws.send_text(encode_server_msg(ErrorMsg(message=str(exc))))
