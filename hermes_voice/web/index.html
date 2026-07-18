@@ -41,6 +41,7 @@
     button, select { cursor: pointer; }
     button:disabled, input:disabled, select:disabled { opacity: 0.4; cursor: default; }
     #topic-search { min-width: min(250px, 100%); }
+    #chat-search { min-width: min(180px, 100%); max-width: 100%; }
     #topic { min-width: min(280px, 100%); max-width: 100%; }
     #topic-status { color: #a9a9b5; font-size: 0.85rem; }
     #immersion-control {
@@ -57,6 +58,29 @@
     #state[data-state="transcribing"] { background: #3a2418; color: #ffb77a; }
     #state[data-state="speaking"] { background: #1c2a4a; color: #8ab4ff; }
     #state[data-state="waiting"] { background: #3a2e14; color: #ffd479; }
+    #mute-indicator {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase;
+      font-size: 0.8rem; padding: 0.3rem 0.85rem;
+      border-radius: 999px; border: 1px solid transparent;
+    }
+    #mute-indicator::before {
+      content: ""; width: 0.6rem; height: 0.6rem; border-radius: 50%;
+      background: currentColor; box-shadow: 0 0 0 0 currentColor;
+    }
+    #mute-indicator[data-muted="false"] {
+      background: #123524; color: #7ee2a8; border-color: #1f6b43;
+    }
+    #mute-indicator[data-muted="true"] {
+      background: #4a1f12; color: #ff9d5c; border-color: #b5531f;
+      animation: mute-pulse 1.1s ease-in-out infinite;
+    }
+    @keyframes mute-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(255, 157, 92, 0.55); }
+      70%  { box-shadow: 0 0 0 0.5rem rgba(255, 157, 92, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 157, 92, 0); }
+    }
+    #top-button { font-weight: 600; }
   #transcript {
     box-sizing: border-box; width: min(680px, calc(100% - 2rem));
     flex: 1 0 auto; min-height: 50vh; overflow: visible; display: flex;
@@ -73,20 +97,17 @@
 
     <div id="controls">
       <select id="chat" aria-label="Telegram chat" disabled></select>
-      <button id="start">Start</button>
-    </div>
-
-    <div id="topic-controls">
       <input
-        id="topic-search"
+        id="chat-search"
         type="search"
-        aria-label="Search Telegram topics"
-        placeholder="Search Telegram topics"
+        aria-label="Search Telegram chats"
+        placeholder="Search your chats"
         disabled
       >
-      <select id="topic" aria-label="Telegram topic" disabled>
-        <option value="">Start voice to load topics</option>
-      </select>
+      <span id="chat-status" role="status">not connected</span>
+      <button id="start">Start</button>
+      <button id="mute" aria-pressed="false" disabled>Mute</button>
+      <button id="stop-speaking" disabled>Stop Speech</button>
       <button id="refresh-topics" disabled>Refresh</button>
       <label
         id="immersion-control"
@@ -95,7 +116,6 @@
         <input id="immersion" type="checkbox">
         Immersion
       </label>
-      <span id="topic-status" role="status">not connected</span>
     </div>
   </header>
 
@@ -107,15 +127,28 @@
       aria-live="polite"
       aria-atomic="true"
     >Idle</span>
-    <button id="mute" aria-pressed="false" disabled>Mute</button>
-    <button id="stop-speaking" disabled>Stop Speech</button>
+    <button id="mute-indicator" type="button" data-muted="false" aria-pressed="false" disabled>Unmuted</button>
+    <div id="topic-controls">
+      <input
+        id="topic-search"
+        type="search"
+        aria-label="Search Telegram topics"
+        placeholder="Search Telegram topics"
+        disabled
+      >
+      <select id="topic" aria-label="Telegram topic" disabled>
+        <option value="">Start voice to load topics</option>
+      </select>
+    </div>
+    <span id="topic-status" role="status">not connected</span>
+    <button id="top-button" type="button">Top ↑</button>
   </div>
 
   <main id="transcript" aria-live="polite"></main>
 
   <script
     type="module"
-    src="/static/main.js?v=20260718-command-mute-sync1"
+    src="/static/main.js?v=20260718-chat-discovery"
   ></script>
 </body>
 </html>

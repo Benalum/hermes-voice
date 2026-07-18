@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 
 from hermes_voice.kit import session as sm
@@ -32,6 +33,14 @@ class TelegramTopic:
     top_message_id: int | None
     closed: bool
     pinned: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TelegramChat:
+    key: str
+    label: str
+    kind: str  # "config" | "user" | "group" | "channel"
+    peer_id: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +82,28 @@ class TelegramRelay:
     async def reset(self, chat_key: str) -> None:
         chat = self._chats.get(chat_key)
         if chat is None:
-            logger.warning("unknown chat key %r; keeping previous chat", chat_key)
+            # Dynamic (discovered) chat: the key is a Telegram peer id pulled
+            # from the user's dialogs at runtime. Bind directly without the
+            # static config lookup.
+            peer_id = self._resolve_peer_id(chat_key)
+            if peer_id is None:
+                logger.warning("unknown chat key %r; keeping previous chat", chat_key)
+                return
+            chat = ChatConfig(
+                key=chat_key,
+                peer=peer_id,
+                label=str(chat_key),
+                max_wait_s=self._default_wait_s(),
+            )
+            self._entity = SimpleNamespace(id=peer_id)
+            self._active_peer_id = peer_id
+            self._active_chat = chat
+            self._active_topic_id = None
+            self._aggregator.reset()
+            self._install_handlers()
+            if self._ticker is None or self._ticker.done():
+                self._ticker = asyncio.create_task(self._run_ticker())
+            logger.info("voice session bound to discovered chat %r (peer id %s)", chat_key, peer_id)
             return
         from telethon import utils
 
@@ -86,6 +116,84 @@ class TelegramRelay:
         if self._ticker is None or self._ticker.done():
             self._ticker = asyncio.create_task(self._run_ticker())
         logger.info("voice session bound to chat %r (peer id %s)", chat_key, self._active_peer_id)
+
+    @staticmethod
+    def _resolve_peer_id(chat_key: str) -> int | None:
+        try:
+            return int(chat_key)
+        except (TypeError, ValueError):
+            return None
+
+    def _default_wait_s(self) -> float:
+        if self._chats:
+            return next(iter(self._chats.values())).max_wait_s
+        return 180.0
+
+    async def list_chats(
+        self,
+        *,
+        query: str = "",
+        limit: int = MAX_TELEGRAM_PAGE_SIZE,
+    ) -> tuple[TelegramChat, ...]:
+        _validate_limit(limit)
+        items: list[TelegramChat] = []
+        for key, chat in self._chats.items():
+            items.append(
+                TelegramChat(key=key, label=chat.label, kind="config", peer_id=None)
+            )
+        discovered = await self._list_discovered_chats(query=query, limit=max(0, limit - len(items)))
+        items.extend(discovered)
+        return tuple(items[:limit])
+
+    async def _list_discovered_chats(
+        self,
+        *,
+        query: str,
+        limit: int,
+    ) -> list[TelegramChat]:
+        client = self._client
+        get_dialogs = getattr(client, "get_dialogs", None)
+        if not callable(get_dialogs):
+            return []
+        try:
+            result = await get_dialogs(limit=200)
+        except Exception:
+            logger.exception("failed to list Telegram dialogs")
+            return []
+        dialogs = getattr(result, "dialogs", None) or getattr(result, "chats", None) or []
+        q = query.strip().casefold()
+        out: list[TelegramChat] = []
+        for dialog in dialogs:
+            entity = getattr(dialog, "entity", None)
+            if entity is None:
+                continue
+            # dialog.name is the computed display name for every chat type
+            # (User first/last, Chat title, Channel title). Fall back to the
+            # entity's own fields when name is missing.
+            title = (
+                getattr(dialog, "name", None)
+                or getattr(entity, "title", None)
+                or getattr(entity, "first_name", None)
+                or getattr(entity, "username", None)
+            )
+            if not isinstance(title, str) or not title.strip():
+                continue
+            if q and q not in title.casefold():
+                continue
+            peer_id = self._resolve_peer_id(str(getattr(entity, "id", "")))
+            if peer_id is None:
+                continue
+            kind = "user" if getattr(dialog, "is_user", False) else (
+                "channel" if getattr(dialog, "is_channel", False) else (
+                    "group" if getattr(dialog, "is_group", False) else "user"
+                )
+            )
+            out.append(
+                TelegramChat(key=str(peer_id), label=title.strip(), kind=kind, peer_id=peer_id)
+            )
+            if len(out) >= limit:
+                break
+        return out
 
     async def select_topic(self, topic_id: int | None) -> None:
         if topic_id is not None and topic_id <= 0:

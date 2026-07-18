@@ -82,3 +82,41 @@ def test_incidental_mute_phrase_does_not_toggle() -> None:
     assert result.forward is True
     assert result.status is None
     assert control.muted is False
+
+
+def test_mute_myself_is_supported() -> None:
+    control = VoiceMuteControl()
+
+    result = control.handle("Mute myself.")
+
+    assert result.forward is False
+    assert result.status == "muted"
+    assert control.muted is True
+
+
+def test_mute_my_self_spacing_is_supported() -> None:
+    control = VoiceMuteControl()
+
+    result = control.handle("Hermes mute my self")
+
+    assert result.status == "muted"
+    assert control.muted is True
+
+
+def test_leading_filler_before_mute_is_supported() -> None:
+    control = VoiceMuteControl()
+
+    result = control.handle("No, mute me.")
+
+    assert result.forward is False
+    assert result.status == "muted"
+    assert control.muted is True
+
+
+def test_unmute_myself_is_supported() -> None:
+    control = VoiceMuteControl(muted=True)
+
+    result = control.handle("Unmute myself")
+
+    assert result.status == "unmuted"
+    assert control.muted is False

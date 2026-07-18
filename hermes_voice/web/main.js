@@ -5,6 +5,8 @@ import {
 
 const els = {
   chat: document.getElementById("chat"),
+  chatSearch: document.getElementById("chat-search"),
+  chatStatus: document.getElementById("chat-status"),
   topicSearch: document.getElementById("topic-search"),
   topic: document.getElementById("topic"),
   refreshTopics: document.getElementById("refresh-topics"),
@@ -15,6 +17,8 @@ const els = {
   stopSpeaking: document.getElementById("stop-speaking"),
   state: document.getElementById("state"),
   transcript: document.getElementById("transcript"),
+  topButton: document.getElementById("top-button"),
+  muteIndicator: document.getElementById("mute-indicator"),
 };
 
 const connectionGuard = new ConnectionGuard();
@@ -135,6 +139,46 @@ const requestTopics = () => {
   els.topic.disabled = true;
   setTopicStatus("loading topics…");
   sendControl({ type: "list_topics", query: "", limit: 100 });
+};
+
+const availableChats = [];
+
+const requestChats = (query = "") => {
+  if (!els.chatSearch) return;
+  els.chat.disabled = true;
+  if (els.chatStatus) els.chatStatus.textContent = "loading chats…";
+  sendControl({ type: "list_chats", query, limit: 200 });
+};
+
+const matchingChats = () => {
+  const words = (els.chatSearch?.value ?? "")
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return availableChats;
+  return availableChats.filter((chat) => {
+    const label = String(chat.label ?? "").toLocaleLowerCase();
+    return words.every((word) => label.includes(word));
+  });
+};
+
+const populateChats = (chats) => {
+  const current = els.chat.value;
+  els.chat.replaceChildren();
+  for (const chat of chats) {
+    const opt = new Option(chat.label, chat.key);
+    opt.dataset.kind = chat.kind;
+    els.chat.appendChild(opt);
+  }
+  if (current && chats.some((c) => c.key === current)) {
+    els.chat.value = current;
+  }
+  els.chat.disabled = chats.length === 0;
+};
+
+const applyChatSearch = () => {
+  populateChats(matchingChats());
 };
 
 const matchingTopics = () => {
@@ -385,6 +429,19 @@ function handleControl(msg, connection) {
       } else {
         resetTopicUi("topics unavailable in this mode");
       }
+      if (els.chatSearch) {
+        els.chatSearch.disabled = false;
+        requestChats("");
+      }
+      break;
+    }
+    case "chats": {
+      availableChats.length = 0;
+      availableChats.push(...(Array.isArray(msg.chats) ? msg.chats : []));
+      applyChatSearch();
+      if (els.chatStatus) {
+        els.chatStatus.textContent = `${availableChats.length} chats`;
+      }
       break;
     }
     case "topics":
@@ -414,6 +471,10 @@ function handleControl(msg, connection) {
       els.mute.textContent = muted ? "Unmute" : "Mute";
       els.mute.setAttribute("aria-pressed", String(muted));
       els.mute.disabled = false;
+      els.muteIndicator.textContent = muted ? "Muted" : "Unmuted";
+      els.muteIndicator.dataset.muted = String(muted);
+      els.muteIndicator.setAttribute("aria-pressed", String(muted));
+      els.muteIndicator.disabled = false;
       break;
     case "transcript":
       if (msg.final && (!topicMode || topicReady)) addLine("user", msg.text);
@@ -463,12 +524,18 @@ function resetConnectionUi() {
   muted = false;
   els.mute.textContent = "Mute";
   els.mute.setAttribute("aria-pressed", "false");
+  els.muteIndicator.textContent = "Unmuted";
+  els.muteIndicator.dataset.muted = "false";
+  els.muteIndicator.setAttribute("aria-pressed", "false");
   topicMode = false;
   resetTopicUi();
   setState("idle");
   els.start.disabled = false;
   els.mute.disabled = true;
   els.stopSpeaking.disabled = true;
+  els.muteIndicator.disabled = true;
+  if (els.chatSearch) els.chatSearch.disabled = true;
+  if (els.chatStatus) els.chatStatus.textContent = "not connected";
 }
 
 async function disconnectConnection(connection, { closeSocket = true } = {}) {
@@ -571,8 +638,20 @@ els.mute.onclick = () => {
     els.mute.disabled = false;
   }
 };
+els.muteIndicator.onclick = () => {
+  const requestedState = !muted;
+  els.mute.disabled = true;
+  els.muteIndicator.disabled = true;
+  if (!sendControl({ type: "mute", on: requestedState })) {
+    els.mute.disabled = false;
+    els.muteIndicator.disabled = false;
+  }
+};
 els.stopSpeaking.onclick = () => {
   sendControl({ type: "cancel" });
+};
+els.topButton.onclick = () => {
+  document.getElementById("app-header")?.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 els.chat.onchange = () => {
   if (!sendControl({ type: "select_chat", chat_key: els.chat.value })) return;
@@ -583,6 +662,11 @@ els.chat.onchange = () => {
   els.topicSearch.disabled = false;
   els.refreshTopics.disabled = false;
   requestTopics();
+};
+let chatSearchTimer = null;
+els.chatSearch.oninput = () => {
+  clearTimeout(chatSearchTimer);
+  chatSearchTimer = setTimeout(() => requestChats(els.chatSearch.value), 200);
 };
 els.topic.onchange = () => {
   selectTopic(Number(els.topic.value));

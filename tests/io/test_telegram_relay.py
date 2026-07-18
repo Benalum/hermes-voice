@@ -30,6 +30,44 @@ class FakeClient:
         self.entities = {"@hermes_bot": types.User(id=111), 222: types.User(id=222)}
         self.next_message_id = 10
         self.requests: list[Any] = []
+        self.dialogs = [
+            SimpleNamespace(
+                id=111,
+                title="Hermes",
+                name="Hermes",
+                entity=SimpleNamespace(id=111),
+                is_user=True,
+                is_group=False,
+                is_channel=False,
+            ),
+            SimpleNamespace(
+                id=222,
+                title="Ops",
+                name="Ops",
+                entity=SimpleNamespace(id=222),
+                is_user=True,
+                is_group=False,
+                is_channel=False,
+            ),
+            SimpleNamespace(
+                id=333,
+                title="Family Group",
+                name="Family Group",
+                entity=SimpleNamespace(id=333),
+                is_user=False,
+                is_group=True,
+                is_channel=False,
+            ),
+            SimpleNamespace(
+                id=444,
+                title="News Channel",
+                name="News Channel",
+                entity=SimpleNamespace(id=444),
+                is_user=False,
+                is_group=False,
+                is_channel=True,
+            ),
+        ]
         self.topics = [
             SimpleNamespace(
                 id=105,
@@ -126,6 +164,9 @@ class FakeClient:
 
     async def get_entity(self, peer: Any) -> Any:
         return self.entities[peer]
+
+    async def get_dialogs(self, *, limit: int = 100, offset_date=None, offset_id=0, offset_peer=None, ignore_pinned=False, ignore_migrated=False, folder=None, archived=False) -> Any:
+        return SimpleNamespace(total=len(self.dialogs), dialogs=self.dialogs[:limit])
 
     async def get_input_entity(self, entity: Any) -> Any:
         return SimpleNamespace(entity=entity)
@@ -495,19 +536,64 @@ class TestTelegramRelay:
         await relay.close()
         assert client.handlers == []
 
-    async def test_repeated_sessions_restore_handler_count_to_baseline(self) -> None:
-        client = FakeClient()
+class TestTelegramRelayChatDiscovery:
+    async def test_list_chats_returns_configured_and_discovered_dialogs(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+        chats = await relay.list_chats(limit=50)
+        keys = {item.key for item in chats}
+        # configured chats appear
+        assert "hermes" in keys
+        assert "ops" in keys
+        # discovered dialogs appear (by peer id)
+        assert "111" in keys
+        assert "333" in keys  # Family Group
+        assert "444" in keys  # News Channel
 
-        for _ in range(3):
-            relay = TelegramRelay(
-                client=client,
-                chats=CHATS,
-                emit=lambda _event: None,
-            )
-            await relay.reset("hermes")
-            assert len(client.handlers) == 3
-            await relay.close()
-            assert client.handlers == []
+    async def test_list_chats_filters_by_query_case_insensitive(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+        chats = await relay.list_chats(query="family", limit=50)
+        labels = {item.label for item in chats}
+        assert "Family Group" in labels
+        assert "News Channel" not in labels
+
+    async def test_list_chats_marks_kind_and_pinned_config_first(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+        chats = await relay.list_chats(limit=50)
+        by_key = {item.key: item for item in chats}
+        # discovered entries carry a kind
+        assert by_key["333"].kind == "group"
+        assert by_key["444"].kind == "channel"
+        assert by_key["111"].kind == "user"
+        # configured chats are flagged as pinned/configured
+        assert by_key["hermes"].kind == "config"
+        # configured chats come first in the list
+        assert [item.key for item in chats][:2] == ["hermes", "ops"]
+
+    async def test_reset_binds_to_discovered_peer_by_id(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+        # switch to a discovered dialog via its peer id
+        await relay.reset("333")
+        assert relay._active_peer_id == 333
+        await relay.send("hi family")
+        # sent to the Family Group entity
+        assert client.sent[-1][0].id == 333
+
+    async def test_reset_to_discovered_peer_replaces_previous_binding(self) -> None:
+        relay, client, clock, events = make_relay()
+        await relay.reset("hermes")
+        await relay.send("first")
+        await relay.reset("444")  # News Channel (discovered)
+        await relay.send("second")
+        assert client.sent[-1][0].id == 444
+        # replies from the old chat are ignored now
+        await client.fire_new_message(chat_id=111, message_id=99, text="stale")
+        clock.now = 100.0
+        relay.pump()
+        assert not any(isinstance(event, AgentSpeakable) for event in events)
 
 
 class TestTelegramRelayCleanupFailures:

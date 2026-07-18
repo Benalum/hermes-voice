@@ -30,6 +30,12 @@ class Mute:
 
 
 @dataclass(frozen=True)
+class ListChats:
+    query: str = ""
+    limit: int = 100
+
+
+@dataclass(frozen=True)
 class ListTopics:
     query: str = ""
     limit: int = 100
@@ -46,7 +52,7 @@ class Cancel:
     pass
 
 
-ClientMsg = Hello | SelectChat | ListTopics | SelectTopic | Mute | Cancel
+ClientMsg = Hello | SelectChat | ListChats | ListTopics | SelectTopic | Mute | Cancel
 
 
 @dataclass(frozen=True)
@@ -59,6 +65,11 @@ class Ready:
 class MuteState:
     on: bool
     source: str
+
+
+@dataclass(frozen=True)
+class Chats:
+    items: tuple[dict[str, object], ...]
 
 
 @dataclass(frozen=True)
@@ -115,6 +126,7 @@ class ErrorMsg:
 ServerMsg = (
     Ready
     | MuteState
+    | Chats
     | Topics
     | TopicSelected
     | TopicHistory
@@ -169,6 +181,17 @@ def decode_client_text(raw: str) -> ClientMsg:
             return Hello(token=str(_require(obj, "token", str)))
         case "select_chat":
             return SelectChat(chat_key=str(_require(obj, "chat_key", str)))
+        case "list_chats":
+            return ListChats(
+                query=_optional_str(obj, "query").strip(),
+                limit=_optional_int(
+                    obj,
+                    "limit",
+                    default=100,
+                    minimum=1,
+                    maximum=500,
+                ),
+            )
         case "list_topics":
             return ListTopics(
                 query=_optional_str(obj, "query").strip(),
@@ -207,6 +230,8 @@ def encode_server_msg(msg: ServerMsg) -> str:
     match msg:
         case Ready(chats=chats, active_chat=active_chat):
             body = {"type": "ready", "chats": list(chats), "active_chat": active_chat}
+        case Chats(items=items):
+            body = {"type": "chats", "chats": list(items)}
         case MuteState(on=on, source=source):
             body = {"type": "mute_state", "on": on, "source": source}
         case Topics(items=items):

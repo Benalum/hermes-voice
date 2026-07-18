@@ -3,8 +3,10 @@ import pytest
 from hermes_voice.kit.protocol import (
     AgentText,
     Cancel,
+    Chats,
     ErrorMsg,
     Hello,
+    ListChats,
     ListTopics,
     Mute,
     MuteState,
@@ -35,11 +37,17 @@ class TestClientMessages:
         msg = decode_client_text('{"type": "select_chat", "chat_key": "research"}')
         assert msg == SelectChat(chat_key="research")
 
-    def test_decodes_list_topics_with_defaults_and_search(self) -> None:
-        assert decode_client_text('{"type": "list_topics"}') == ListTopics()
+    def test_decodes_list_chats_with_defaults_and_search(self) -> None:
+        assert decode_client_text('{"type": "list_chats"}') == ListChats()
         assert decode_client_text(
-            '{"type": "list_topics", "query": "  system  ", "limit": 20}'
-        ) == ListTopics(query="system", limit=20)
+            '{"type": "list_chats", "query": "  alex  ", "limit": 25}'
+        ) == ListChats(query="alex", limit=25)
+
+    def test_rejects_invalid_list_chats_values(self) -> None:
+        with pytest.raises(ProtocolError):
+            decode_client_text('{"type": "list_chats", "limit": 0}')
+        with pytest.raises(ProtocolError):
+            decode_client_text('{"type": "list_chats", "limit": 501}')
 
     def test_decodes_select_topic_with_history_limit(self) -> None:
         assert decode_client_text('{"type": "select_topic", "topic_id": 98}') == SelectTopic(
@@ -104,7 +112,18 @@ class TestServerMessages:
             '{"type": "mute_state", "on": false, "source": "button"}'
         )
 
-    def test_encodes_topics(self) -> None:
+    def test_encodes_discovered_chats(self) -> None:
+        msg = Chats(
+            items=(
+                {"key": "100123", "label": "Alex", "kind": "user"},
+                {"key": "research", "label": "Research", "kind": "channel"},
+            )
+        )
+        assert encode_server_msg(msg) == (
+            '{"type": "chats", "chats": [{"key": "100123", "label": "Alex", '
+            '"kind": "user"}, {"key": "research", "label": "Research", '
+            '"kind": "channel"}]}'
+        )
         msg = Topics(
             items=(
                 {
