@@ -198,6 +198,111 @@ class TestParrotLoop:
 
 
 class TestMutedPlayback:
+    async def test_spoken_mute_during_playback_does_not_stop_reply(self) -> None:
+        from hermes_voice.kit import session as sm
+        from hermes_voice.server.orchestrator import Orchestrator
+
+        sent: list[dict[str, Any]] = []
+        stt = FakeStt("Hermes mute me")
+
+        async def record_text(message: str) -> None:
+            sent.append(json.loads(message))
+
+        class LongTts:
+            async def synthesize(self, text: str) -> bytes:
+                return b"\x11\x22" * (24000 * 5)
+
+        orchestrator = Orchestrator(
+            send_text=record_text,
+            send_bytes=_ignore_bytes,
+            vad=FakeVad(),
+            stt=stt,
+            tts=LongTts(),
+            make_responder=lambda emit: _IgnoreResponder(),
+            initial_chat="hermes",
+        )
+        task = asyncio.create_task(orchestrator.run())
+        try:
+            await orchestrator.set_muted(False)
+            orchestrator.emit(sm.AgentSpeakable(text="a long reply", message_id=1))
+            for _ in range(100):
+                if any(message["type"] == "speak_start" for message in sent):
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("playback did not start")
+
+            for frame in [SPEECH_FRAME] * 8 + [SILENT_FRAME] * 16:
+                orchestrator.feed_audio(frame)
+            for _ in range(100):
+                if any(
+                    message == {"type": "mute_state", "on": True, "source": "voice"}
+                    for message in sent
+                ):
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("spoken mute was not accepted during playback")
+
+            assert not any(message["type"] == "speak_stop" and message["flush"] for message in sent)
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    async def test_unmuted_speech_still_stops_active_playback(self) -> None:
+        from hermes_voice.kit import session as sm
+        from hermes_voice.server.orchestrator import Orchestrator
+
+        sent: list[dict[str, Any]] = []
+        stt = FakeStt("interrupting request")
+
+        async def record_text(message: str) -> None:
+            sent.append(json.loads(message))
+
+        class LongTts:
+            async def synthesize(self, text: str) -> bytes:
+                return b"\x11\x22" * (24000 * 5)
+
+        orchestrator = Orchestrator(
+            send_text=record_text,
+            send_bytes=_ignore_bytes,
+            vad=FakeVad(),
+            stt=stt,
+            tts=LongTts(),
+            make_responder=lambda emit: _IgnoreResponder(),
+            initial_chat="hermes",
+        )
+        task = asyncio.create_task(orchestrator.run())
+        try:
+            await orchestrator.set_muted(False)
+            orchestrator.emit(sm.AgentSpeakable(text="a long reply", message_id=1))
+            for _ in range(100):
+                if any(message["type"] == "speak_start" for message in sent):
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("playback did not start")
+
+            for frame in [SPEECH_FRAME] * 8 + [SILENT_FRAME] * 16:
+                orchestrator.feed_audio(frame)
+            for _ in range(100):
+                if any(message["type"] == "speak_stop" and message["flush"] for message in sent):
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("ordinary unmuted speech did not stop playback")
+
+            assert any(
+                message.get("type") == "transcript"
+                and message.get("text") == "interrupting request"
+                for message in sent
+            )
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
     async def test_muted_speech_does_not_stop_active_playback(self) -> None:
         from hermes_voice.kit import session as sm
         from hermes_voice.server.orchestrator import Orchestrator
