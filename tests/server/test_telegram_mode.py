@@ -66,6 +66,31 @@ class TestTelegramMode:
             ws.send_text('{"type": "select_chat", "chat_key": "ops"}')
             ws.send_text('{"type": "cancel"}')
 
+    def test_failed_chat_switch_does_not_close_websocket(self) -> None:
+        telegram_client = FakeClient()
+        del telegram_client.entities[222]
+        app = create_app(
+            mode="telegram",
+            config=make_config(),
+            telegram_client=telegram_client,
+            vad=FakeVad(),
+            stt=FakeStt(),
+            tts=FakeTts(),
+        )
+
+        with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+            ws.send_text(
+                '{"type": "hello", "token": "test-token-abcdefghijklmnopqrstuvwxyz0123456789"}'
+            )
+            ws.receive_text()
+            ws.receive_text()
+
+            ws.send_text('{"type": "select_chat", "chat_key": "ops"}')
+            assert json.loads(ws.receive_text())["type"] == "error"
+
+            ws.send_text('{"type": "list_chats", "limit": 500}')
+            assert json.loads(ws.receive_text())["type"] == "chats"
+
 
 class TestTelegramTopicProtocol:
     def test_list_topics_returns_telegram_metadata(self) -> None:

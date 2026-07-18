@@ -288,7 +288,8 @@ async def _run_voice_session(
                         await orchestrator.set_muted(on, source="button")
                     case Hello():
                         pass
-            except (RuntimeError, ValueError) as exc:
+            except Exception as exc:
+                logger.exception("voice control request failed")
                 await ws.send_text(encode_server_msg(ErrorMsg(message=str(exc))))
     finally:
         if receive_task is not None and not receive_task.done():

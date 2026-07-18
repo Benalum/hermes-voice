@@ -34,6 +34,9 @@
       width: min(760px, 100%); display: flex; gap: 0.5rem; align-items: center;
       flex-wrap: wrap; justify-content: center;
     }
+    #chat-controls {
+      width: min(420px, 100%); display: grid; gap: 0.5rem;
+    }
     button, input, select {
       background: #1c1c24; color: inherit; border: 1px solid #33333e;
       border-radius: 8px; padding: 0.5rem 1rem; font-size: 0.95rem;
@@ -41,7 +44,7 @@
     button, select { cursor: pointer; }
     button:disabled, input:disabled, select:disabled { opacity: 0.4; cursor: default; }
     #topic-search { min-width: min(250px, 100%); }
-    #chat-search { min-width: min(180px, 100%); max-width: 100%; }
+    #chat-search, #chat { box-sizing: border-box; width: 100%; max-width: 100%; }
     #topic { min-width: min(280px, 100%); max-width: 100%; }
     #topic-status { color: #a9a9b5; font-size: 0.85rem; }
     #immersion-control {
@@ -96,18 +99,18 @@
     <h1>HERMES VOICE</h1>
 
     <div id="controls">
-      <select id="chat" aria-label="Telegram chat" disabled></select>
-      <input
-        id="chat-search"
-        type="search"
-        aria-label="Search Telegram chats"
-        placeholder="Search your chats"
-        disabled
-      >
+      <div id="chat-controls">
+        <input
+          id="chat-search"
+          type="search"
+          aria-label="Filter Telegram chats"
+          placeholder="Filter your chats"
+          disabled
+        >
+        <select id="chat" aria-label="Telegram chat" disabled></select>
+      </div>
       <span id="chat-status" role="status">not connected</span>
       <button id="start">Start</button>
-      <button id="stop-speaking" disabled>Stop Speech</button>
-      <button id="refresh-topics" disabled>Refresh</button>
       <label
         id="immersion-control"
         title="Show the latest consecutive user and Hermes message groups"
@@ -137,8 +140,8 @@
       <input
         id="topic-search"
         type="search"
-        aria-label="Search Telegram topics"
-        placeholder="Search Telegram topics"
+        aria-label="Filter Telegram topics"
+        placeholder="Filter Telegram topics"
         disabled
       >
       <select id="topic" aria-label="Telegram topic" disabled>
@@ -153,7 +156,7 @@
 
   <script
     type="module"
-    src="/static/main.js?v=20260718-chat-mute-fix"
+    src="/static/main.js?v=20260718-filter-layout"
   ></script>
 </body>
 </html>

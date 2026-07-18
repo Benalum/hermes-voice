@@ -220,19 +220,29 @@ class TelegramRelay:
         _validate_limit(limit)
         entity = self._require_entity()
 
-        from telethon.tl import functions
+        if getattr(entity, "forum", None) is False:
+            return ()
 
-        input_peer = await self._client.get_input_entity(entity)
-        result = await self._client(
-            functions.messages.GetForumTopicsRequest(
-                peer=input_peer,
-                offset_date=None,
-                offset_id=0,
-                offset_topic=0,
-                limit=limit,
-                q=query.strip(),
+        try:
+            from telethon.tl import functions
+
+            input_peer = await self._client.get_input_entity(entity)
+            result = await self._client(
+                functions.messages.GetForumTopicsRequest(
+                    peer=input_peer,
+                    offset_date=None,
+                    offset_id=0,
+                    offset_topic=0,
+                    limit=limit,
+                    q=query.strip(),
+                )
             )
-        )
+        except Exception:
+            # Users and ordinary groups do not support Telegram forum topics.
+            # Treat that as a valid topic-less chat instead of terminating the
+            # voice WebSocket when Telegram rejects GetForumTopicsRequest.
+            logger.info("active Telegram chat does not expose forum topics")
+            return ()
 
         topics: list[TelegramTopic] = []
         for item in getattr(result, "topics", []):

@@ -35,6 +35,7 @@ class FakeClient:
         }
         self.next_message_id = 10
         self.requests: list[Any] = []
+        self.topic_error: Exception | None = None
         self.dialog_limits: list[int] = []
         self.dialogs = [
             SimpleNamespace(
@@ -173,6 +174,8 @@ class FakeClient:
         request_name = type(request).__name__
 
         if request_name == "GetForumTopicsRequest":
+            if self.topic_error is not None:
+                raise self.topic_error
             query = request.q.casefold()
             topics = [
                 topic for topic in self.topics if not query or query in topic.title.casefold()
@@ -293,6 +296,15 @@ class TestTelegramRelay:
 
         assert [topic.title for topic in topics] == ["System"]
         assert client.requests[-1].q == "system"
+
+    async def test_chat_without_forum_topics_returns_an_empty_list(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+        client.topic_error = RuntimeError("The chat is not a forum")
+
+        topics = await relay.list_topics()
+
+        assert topics == ()
 
     async def test_topic_reads_require_active_chat_and_valid_limits(self) -> None:
         relay, _, _, _ = make_relay()

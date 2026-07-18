@@ -479,6 +479,41 @@ class TestOrchestratorTopicControls:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
 
+    async def test_failed_chat_switch_restores_previous_session(self) -> None:
+        from hermes_voice.kit import session as sm
+        from hermes_voice.server.orchestrator import Orchestrator
+
+        class SwitchFailingResponder(TopicResponder):
+            async def reset(self, chat_key: str) -> None:
+                self.reset_calls.append(chat_key)
+                if chat_key == "unavailable":
+                    raise RuntimeError("chat unavailable")
+                self.selected_topic = None
+
+        orchestrator = Orchestrator(
+            send_text=_ignore_text,
+            send_bytes=_ignore_bytes,
+            vad=FakeVad(),
+            stt=FakeStt(),
+            tts=FakeTts(),
+            make_responder=SwitchFailingResponder,
+            initial_chat="hermes",
+        )
+        task = asyncio.create_task(orchestrator.run())
+        try:
+            await orchestrator.list_topics()
+
+            with pytest.raises(RuntimeError, match="chat unavailable"):
+                await orchestrator.dispatch(sm.ChatSelected(chat_key="unavailable"))
+
+            assert orchestrator._session.chat_key == "hermes"
+            assert not task.done()
+            assert await orchestrator.list_topics() == (":100",)
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
 
 async def _ignore_text(_text: str) -> None:
     return None

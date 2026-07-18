@@ -61,10 +61,12 @@ def test_header_and_sticky_voice_controls_have_distinct_roles() -> None:
     voice_actions = _html_element("voice-actions")
 
     assert 'id="start"' in controls
+    assert 'id="chat-controls"' in controls
     assert 'id="chat"' in controls
     assert 'id="chat-search"' in controls
     assert 'id="chat-status"' in controls
-    assert 'id="stop-speaking"' in controls
+    assert 'id="stop-speaking"' not in controls
+    assert 'id="refresh-topics"' not in controls
     assert 'id="state"' not in controls
     assert 'id="mute"' not in controls
     assert 'id="mute-indicator"' not in controls
@@ -77,6 +79,22 @@ def test_header_and_sticky_voice_controls_have_distinct_roles() -> None:
     assert 'id="topic"' in voice_actions
     assert 'id="top-button"' in voice_actions
     assert 'id="stop-speaking"' not in voice_actions
+
+
+def test_chat_filter_is_above_the_chat_selector() -> None:
+    chat_controls = _html_element("chat-controls")
+
+    assert chat_controls.index('id="chat-search"') < chat_controls.index('id="chat"')
+    assert 'placeholder="Filter your chats"' in chat_controls
+    assert 'aria-label="Filter Telegram chats"' in chat_controls
+
+
+def test_header_omits_redundant_voice_action_buttons() -> None:
+    header = _html_element("app-header")
+
+    assert 'id="mute"' not in header
+    assert 'id="stop-speaking"' not in header
+    assert 'id="refresh-topics"' not in header
 
 
 def test_chat_discovery_loads_once_and_searches_the_local_full_list() -> None:

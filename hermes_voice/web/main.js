@@ -9,11 +9,9 @@ const els = {
   chatStatus: document.getElementById("chat-status"),
   topicSearch: document.getElementById("topic-search"),
   topic: document.getElementById("topic"),
-  refreshTopics: document.getElementById("refresh-topics"),
   topicStatus: document.getElementById("topic-status"),
   immersion: document.getElementById("immersion"),
   start: document.getElementById("start"),
-  stopSpeaking: document.getElementById("stop-speaking"),
   state: document.getElementById("state"),
   transcript: document.getElementById("transcript"),
   topButton: document.getElementById("top-button"),
@@ -128,7 +126,6 @@ const resetTopicUi = (status = "not connected") => {
   availableTopics = [];
   els.topicSearch.disabled = true;
   els.topic.disabled = true;
-  els.refreshTopics.disabled = true;
   els.topic.replaceChildren(new Option("No topic selected", ""));
   setTopicStatus(status);
 };
@@ -430,7 +427,6 @@ function handleControl(msg, connection) {
       if (topicMode) {
         els.topicSearch.value = "";
         els.topicSearch.disabled = false;
-        els.refreshTopics.disabled = false;
         clearTranscript();
         requestTopics();
       } else {
@@ -448,6 +444,16 @@ function handleControl(msg, connection) {
     }
     case "topics":
       availableTopics = Array.isArray(msg.topics) ? msg.topics : [];
+      if (availableTopics.length === 0) {
+        topicMode = false;
+        topicReady = true;
+        els.topicSearch.disabled = true;
+        applyTopicSearch();
+        setTopicStatus("chat ready · no Telegram topics");
+        break;
+      }
+      topicMode = true;
+      els.topicSearch.disabled = false;
       applyTopicSearch();
       break;
     case "topic_selected":
@@ -528,7 +534,6 @@ function resetConnectionUi() {
   resetTopicUi();
   setState("idle");
   els.start.disabled = false;
-  els.stopSpeaking.disabled = true;
   els.muteIndicator.disabled = true;
   availableChats.length = 0;
   els.chat.replaceChildren(new Option("Start voice to load chats", ""));
@@ -585,7 +590,6 @@ async function connect() {
         type: "hello",
         token: localStorage.getItem("hv_token") ?? "",
       }));
-      els.stopSpeaking.disabled = false;
     },
   );
   socket.onmessage = guardConnectionCallback(
@@ -637,9 +641,6 @@ els.muteIndicator.onclick = () => {
     els.muteIndicator.disabled = false;
   }
 };
-els.stopSpeaking.onclick = () => {
-  sendControl({ type: "cancel" });
-};
 els.topButton.onclick = () => {
   document.getElementById("app-header")?.scrollIntoView({ behavior: "smooth", block: "start" });
 };
@@ -650,7 +651,6 @@ els.chat.onchange = () => {
   topicMode = true;
   els.topicSearch.value = "";
   els.topicSearch.disabled = false;
-  els.refreshTopics.disabled = false;
   requestTopics();
 };
 let chatSearchTimer = null;
@@ -660,9 +660,6 @@ els.chatSearch.oninput = () => {
 };
 els.topic.onchange = () => {
   selectTopic(Number(els.topic.value));
-};
-els.refreshTopics.onclick = () => {
-  requestTopics();
 };
 els.topicSearch.oninput = () => {
   clearTimeout(topicSearchTimer);

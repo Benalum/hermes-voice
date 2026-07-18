@@ -215,6 +215,23 @@ assert.equal(first.sent.length, beforeMutedAudio + 1);
 assert.equal(mute.textContent, "Muted");
 assert.equal(mute.attributes.get("aria-pressed"), "true");
 
+const chat = element("chat");
+chat.value = "333";
+chat.onchange();
+const beforeTopiclessChatAudio = first.sent.length;
+topicMicCallback({
+  data: new Uint8Array([5]).buffer,
+});
+assert.equal(first.sent.length, beforeTopiclessChatAudio);
+
+first.onmessage({
+  data: JSON.stringify({ type: "topics", topics: [] }),
+});
+topicMicCallback({
+  data: new Uint8Array([6]).buffer,
+});
+assert.equal(first.sent.length, beforeTopiclessChatAudio + 1);
+
 const staleMicCallback = topicMicCallback;
 const firstSendCount = first.sent.length;
 

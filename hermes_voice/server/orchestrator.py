@@ -209,9 +209,16 @@ class Orchestrator:
 
     async def _handle(self, event: sm.Event) -> None:
         before = self._session
-        self._session, effects = sm.advance(self._session, event)
-        for effect in effects:
-            await self._apply(effect)
+        next_session, effects = sm.advance(self._session, event)
+        self._session = next_session
+        try:
+            for effect in effects:
+                await self._apply(effect)
+        except Exception:
+            # Do not leave the state machine bound to a Telegram destination
+            # that the responder could not select.
+            self._session = before
+            raise
         if self._session.state is not before.state:
             await self._send(StateMsg(name=self._session.state.value))
         self._manage_wait_timer()

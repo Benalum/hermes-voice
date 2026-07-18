@@ -94,13 +94,14 @@ Hermes Voice can optionally reject utterances that do not match an enrolled
 speaker before speech-to-text runs. It also supports synchronized browser and
 spoken command mute controls. Say **“Hermes mute me”** to suppress ordinary
 transcripts at the server, then **“Hermes unmute me”** to resume forwarding.
+While muted, say **“Hermes stop speaking”** or **“Stop speech”** to stop the
+current agent reply without unmuting the session.
 
 Command mute deliberately keeps the browser microphone stream connected so the
 server can recognize an unmute command locally. Muted speech is not relayed to
-Telegram or the agent, and neither a spoken mute command nor later muted speech
-interrupts reply playback. Use the
-operating system or browser microphone control when no audio may leave the
-device at all.
+Telegram or the agent. Ordinary muted speech does not interrupt reply playback;
+only an explicit stop-speech command does. Use the operating system or browser
+microphone control when no audio may leave the device at all.
 
 See [Speaker filtering and voice mute](docs/speaker-filtering-and-voice-mute.md)
 for installation, enrollment, calibration, privacy behavior, and troubleshooting.
