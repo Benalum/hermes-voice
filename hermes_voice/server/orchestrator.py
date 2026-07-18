@@ -123,6 +123,14 @@ class Orchestrator:
             raise RuntimeError("the active responder does not support Telegram topics")
         return tuple(await method(query=query, limit=limit))
 
+    async def list_chats(self, *, query: str = "", limit: int = 100) -> tuple[Any, ...]:
+        await self._wait_until_ready()
+        self._raise_if_stopped()
+        method = getattr(self._responder, "list_chats", None)
+        if not callable(method):
+            raise RuntimeError("the active responder does not support Telegram chats")
+        return tuple(await method(query=query, limit=limit))
+
     async def select_topic(self, topic_id: int) -> None:
         await self._wait_until_ready()
         self._raise_if_stopped()
@@ -272,6 +280,8 @@ class Orchestrator:
                 "voice control: %s by spoken command",
                 "muted" if muted else "unmuted",
             )
+        if mute_result.stop_speaking:
+            self.emit(sm.CancelPressed())
         if command_only:
             return
         if not mute_result.forward:

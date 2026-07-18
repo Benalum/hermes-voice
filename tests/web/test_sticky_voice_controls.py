@@ -20,14 +20,29 @@ def _css_rule(selector: str) -> str:
 
 
 def _html_element(element_id: str) -> str:
-    match = re.search(
-        rf'<(?P<tag>[a-z]+)[^>]*id="{re.escape(element_id)}"'
-        rf"[^>]*>.*?</(?P=tag)>",
+    open_match = re.search(
+        rf'<(?P<tag>[a-z]+)[^>]*id="{re.escape(element_id)}"',
         INDEX,
-        flags=re.DOTALL,
     )
-    assert match is not None, f"missing HTML element: {element_id}"
-    return match.group(0)
+    assert open_match is not None, f"missing HTML element: {element_id}"
+    tag = open_match.group("tag")
+    start = open_match.start()
+    depth = 0
+    i = INDEX.find(">", start) + 1
+    while i < len(INDEX):
+        next_open = INDEX.find(f"<{tag}", i)
+        next_close = INDEX.find(f"</{tag}>", i)
+        if next_open == -1 and next_close == -1:
+            break
+        if next_close == -1 or (next_open != -1 and next_open < next_close):
+            depth += 1
+            i = next_open + len(f"<{tag}")
+        else:
+            if depth == 0:
+                return INDEX[start : next_close + len(f"</{tag}>")]
+            depth -= 1
+            i = next_close + len(f"</{tag}>")
+    raise AssertionError(f"unbalanced element: {element_id}")
 
 
 def test_only_voice_action_strip_is_sticky() -> None:
@@ -41,20 +56,35 @@ def test_only_voice_action_strip_is_sticky() -> None:
     assert "top: 0" in voice_actions
 
 
-def test_voice_status_mute_and_stop_are_in_sticky_strip() -> None:
+def test_header_and_sticky_voice_controls_have_distinct_roles() -> None:
     controls = _html_element("controls")
     voice_actions = _html_element("voice-actions")
 
     assert 'id="start"' in controls
+    assert 'id="chat"' in controls
+    assert 'id="chat-search"' in controls
+    assert 'id="chat-status"' in controls
+    assert 'id="stop-speaking"' in controls
     assert 'id="state"' not in controls
     assert 'id="mute"' not in controls
-    assert 'id="stop-speaking"' not in controls
+    assert 'id="mute-indicator"' not in controls
 
     assert 'id="state"' in voice_actions
     assert 'role="status"' in voice_actions
     assert 'aria-live="polite"' in voice_actions
-    assert 'id="mute"' in voice_actions
-    assert 'id="stop-speaking"' in voice_actions
+    assert 'id="mute-indicator"' in voice_actions
+    assert 'id="topic-controls"' in voice_actions
+    assert 'id="topic"' in voice_actions
+    assert 'id="top-button"' in voice_actions
+    assert 'id="stop-speaking"' not in voice_actions
+
+
+def test_chat_discovery_loads_once_and_searches_the_local_full_list() -> None:
+    assert 'sendControl({ type: "list_chats", query: "", limit: 500 })' in MAIN
+    assert 'case "chats":' in MAIN
+    assert "availableChats" in MAIN
+    assert "matchingChats" in MAIN
+    assert "chatSearchTimer = setTimeout(() => applyChatSearch(), 50)" in MAIN
 
 
 def test_page_owns_scrolling_instead_of_transcript() -> None:
@@ -73,7 +103,8 @@ def test_command_mute_keeps_microphone_frames_flowing_to_server() -> None:
     assert "muted = Boolean(msg.on)" in MAIN
 
 
-def test_mute_button_waits_for_server_acknowledgement() -> None:
+def test_sticky_mute_indicator_waits_for_server_acknowledgement() -> None:
     assert "const requestedState = !muted" in MAIN
     assert 'sendControl({ type: "mute", on: requestedState })' in MAIN
-    assert "els.mute.disabled = true" in MAIN
+    assert "els.muteIndicator.disabled = true" in MAIN
+    assert "els.mute." not in MAIN

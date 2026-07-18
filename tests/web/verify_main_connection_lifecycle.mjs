@@ -137,7 +137,7 @@ Object.defineProperty(globalThis, "navigator", {
 await import("../../hermes_voice/web/main.js?connection-lifecycle-test");
 
 const start = element("start");
-const mute = element("mute");
+const mute = element("mute-indicator");
 const state = element("state");
 
 await start.onclick();
@@ -212,7 +212,7 @@ topicMicCallback({
   data: new Uint8Array([4]).buffer,
 });
 assert.equal(first.sent.length, beforeMutedAudio + 1);
-assert.equal(mute.textContent, "Unmute");
+assert.equal(mute.textContent, "Muted");
 assert.equal(mute.attributes.get("aria-pressed"), "true");
 
 const staleMicCallback = topicMicCallback;
@@ -227,6 +227,7 @@ second.onopen();
 second.onmessage({
   data: JSON.stringify({ type: "ready", chats: [], active_chat: null }),
 });
+const secondSendCount = second.sent.length;
 assert.equal(state.textContent, "listening");
 assert.equal(mute.disabled, false);
 assert.equal(start.disabled, true);
@@ -244,7 +245,7 @@ assert.equal(start.disabled, true);
 
 staleMicCallback({ data: new Uint8Array([1]).buffer });
 assert.equal(first.sent.length, firstSendCount);
-assert.equal(second.sent.length, 1);
+assert.equal(second.sent.length, secondSendCount);
 
 second.readyState = FakeWebSocket.CLOSED;
 second.onclose();
