@@ -336,7 +336,6 @@ async function startMic(connection) {
         if (micSession !== session) return;
         if (
           (!topicMode || topicReady)
-          && !muted
           && connection.socket.readyState === WebSocket.OPEN
           && event.data.byteLength > 0
         ) {
@@ -409,6 +408,12 @@ function handleControl(msg, connection) {
     }
     case "state":
       setState(msg.name);
+      break;
+    case "mute_state":
+      muted = Boolean(msg.on);
+      els.mute.textContent = muted ? "Unmute" : "Mute";
+      els.mute.setAttribute("aria-pressed", String(muted));
+      els.mute.disabled = false;
       break;
     case "transcript":
       if (msg.final && (!topicMode || topicReady)) addLine("user", msg.text);
@@ -559,9 +564,11 @@ async function connect() {
 
 els.start.onclick = () => connect().catch((error) => addLine("agent", `⚠ ${error.message}`));
 els.mute.onclick = () => {
-  muted = !muted;
-  els.mute.textContent = muted ? "Unmute" : "Mute";
-  sendControl({ type: "mute", on: muted });
+  const requestedState = !muted;
+  els.mute.disabled = true;
+  if (!sendControl({ type: "mute", on: requestedState })) {
+    els.mute.disabled = false;
+  }
 };
 els.stopSpeaking.onclick = () => {
   sendControl({ type: "cancel" });
