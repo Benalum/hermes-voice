@@ -235,20 +235,20 @@ def test_worker_preserves_default_cpu_threads_elsewhere(
 
 def test_worker_response_read_times_out_when_process_is_silent() -> None:
     read_fd, write_fd = os.pipe()
-    try:
-        with (
-            os.fdopen(read_fd, "rb", buffering=0) as stream,
-            pytest.raises(
+    with os.fdopen(read_fd, "rb", buffering=0) as stream:
+        try:
+            with pytest.raises(
                 TimeoutError,
                 match="timed out waiting",
-            ),
-        ):
-            module._read_frame_with_timeout(
-                stream,
-                0.01,
-            )
-    finally:
-        os.close(write_fd)
+            ):
+                module._read_frame_with_timeout(
+                    stream,
+                    0.01,
+                )
+        finally:
+            # On Windows the timeout reader is a daemon thread. Closing the
+            # writer before the reader context exits wakes that blocked read.
+            os.close(write_fd)
 
 
 def test_worker_response_read_times_out_on_partial_frame() -> None:
@@ -273,17 +273,15 @@ def test_worker_response_read_times_out_on_partial_frame() -> None:
 
 def test_threaded_worker_response_read_times_out_for_non_socket_pipe() -> None:
     read_fd, write_fd = os.pipe()
-    try:
-        with (
-            os.fdopen(read_fd, "rb", buffering=0) as stream,
-            pytest.raises(
+    with os.fdopen(read_fd, "rb", buffering=0) as stream:
+        try:
+            with pytest.raises(
                 TimeoutError,
                 match="timed out waiting",
-            ),
-        ):
-            module._read_frame_with_thread_timeout(stream, 0.01)
-    finally:
-        os.close(write_fd)
+            ):
+                module._read_frame_with_thread_timeout(stream, 0.01)
+        finally:
+            os.close(write_fd)
 
 
 def test_transcription_timeout_closes_worker(
