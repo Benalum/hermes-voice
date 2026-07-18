@@ -97,7 +97,8 @@ transcripts at the server, then **“Hermes unmute me”** to resume forwarding.
 
 Command mute deliberately keeps the browser microphone stream connected so the
 server can recognize an unmute command locally. Muted speech is not relayed to
-Telegram or the agent, and it does not interrupt reply playback. Use the
+Telegram or the agent, and neither a spoken mute command nor later muted speech
+interrupts reply playback. Use the
 operating system or browser microphone control when no audio may leave the
 device at all.
 
