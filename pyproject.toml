@@ -12,6 +12,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+speaker-filter = [
+    "resemblyzer>=0.1.4",
+    "resampy>=0.4",
+    "sounddevice>=0.5",
+    "soundfile>=0.13",
+]
+
 speech-macos = [
     "parakeet-mlx>=0.3; sys_platform == 'darwin' and (platform_machine == 'arm64' or platform_machine == 'aarch64')",
     "mlx-audio>=0.2; sys_platform == 'darwin' and (platform_machine == 'arm64' or platform_machine == 'aarch64')",
@@ -113,4 +120,8 @@ module = [
     "hermes_voice.io.tts_kokoro_portable",
     "hermes_voice.io.vad_silero",
 ]
+disable_error_code = ["import-not-found", "import-untyped"]
+
+[[tool.mypy.overrides]]
+module = "hermes_voice.kit.speaker_gate"
 disable_error_code = ["import-not-found", "import-untyped"]
