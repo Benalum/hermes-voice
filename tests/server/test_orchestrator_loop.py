@@ -199,6 +199,79 @@ class TestParrotLoop:
         assert states == ["transcribing", "waiting", "speaking", "listening"]
 
 
+class TestMutedPlayback:
+    async def test_muted_speech_does_not_stop_active_playback(self) -> None:
+        from hermes_voice.kit import session as sm
+        from hermes_voice.server.orchestrator import Orchestrator
+
+        sent: list[dict[str, Any]] = []
+        stt = FakeStt("private speech")
+
+        async def record_text(message: str) -> None:
+            sent.append(json.loads(message))
+
+        class LongTts:
+            async def synthesize(self, text: str) -> bytes:
+                return b"\x11\x22" * (24000 * 5)
+
+        orchestrator = Orchestrator(
+            send_text=record_text,
+            send_bytes=_ignore_bytes,
+            vad=FakeVad(),
+            stt=stt,
+            tts=LongTts(),
+            make_responder=lambda emit: _IgnoreResponder(),
+            initial_chat="hermes",
+        )
+        task = asyncio.create_task(orchestrator.run())
+        try:
+            await orchestrator.set_muted(True)
+            orchestrator.emit(sm.AgentSpeakable(text="a long reply", message_id=1))
+            for _ in range(100):
+                if any(message["type"] == "speak_start" for message in sent):
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("playback did not start")
+
+            for frame in [SPEECH_FRAME] * 4 + [SILENT_FRAME] * 16:
+                orchestrator.feed_audio(frame)
+            for _ in range(100):
+                if len(stt.utterances) == 1:
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("muted utterance did not reach command-only STT")
+
+            assert not any(
+                message["type"] == "speak_stop" and message["flush"]
+                for message in sent
+            )
+
+            stt.text = "Hermes unmute me"
+            for frame in [SPEECH_FRAME] * 4 + [SILENT_FRAME] * 16:
+                orchestrator.feed_audio(frame)
+            for _ in range(100):
+                if any(
+                    message
+                    == {"type": "mute_state", "on": False, "source": "voice"}
+                    for message in sent
+                ):
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("spoken unmute was not accepted during playback")
+
+            assert not any(
+                message["type"] == "speak_stop" and message["flush"]
+                for message in sent
+            )
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+
 class TopicResponder:
     def __init__(self, emit: Any) -> None:
         self.emit = emit
