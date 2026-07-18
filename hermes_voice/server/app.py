@@ -25,7 +25,6 @@ from fastapi.staticfiles import StaticFiles
 
 from hermes_voice.kit import session as sm
 from hermes_voice.kit.ports import ResponderPort, SttPort, TtsPort, VadPort
-from hermes_voice.kit.speaker_gate import SpeakerGate
 from hermes_voice.kit.protocol import (
     Cancel,
     ErrorMsg,
@@ -43,6 +42,7 @@ from hermes_voice.kit.protocol import (
     encode_audio_frame,
     encode_server_msg,
 )
+from hermes_voice.kit.speaker_gate import SpeakerGate
 from hermes_voice.server.config import (
     Config,
     load_config,
@@ -182,7 +182,7 @@ async def _run_voice_session(
     make_responder: MakeResponder,
     initial_chat: str,
     orchestrator_config: OrchestratorConfig,
-    speaker_gate: "SpeakerGate | None" = None,
+    speaker_gate: SpeakerGate | None = None,
 ) -> None:
     orchestrator = Orchestrator(
         send_text=ws.send_text,
@@ -346,7 +346,7 @@ def create_app(
     speech_ports: dict[str, Any] = {"vad": vad, "stt": stt, "tts": tts}
     voice_session_gate = _VoiceSessionGate()
     health = {"models": "n/a", "telegram": "n/a"}
-    speaker_gate: "SpeakerGate | None" = None
+    speaker_gate: SpeakerGate | None = None
     if resolved_config is not None and resolved_config.speaker_gate.enabled:
         try:
             speaker_gate = SpeakerGate(resolved_config.speaker_gate)
