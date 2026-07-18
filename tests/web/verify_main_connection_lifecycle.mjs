@@ -13,10 +13,15 @@ class FakeElement {
     this.onclick = null;
     this.onchange = null;
     this.oninput = null;
+    this.attributes = new Map();
   }
 
   replaceChildren(...children) {
     this.children = children;
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, value);
   }
 }
 
@@ -198,6 +203,17 @@ topicMicCallback({
   data: new Uint8Array([3]).buffer,
 });
 assert.equal(first.sent.length, beforeTopicSelection + 2);
+
+first.onmessage({
+  data: JSON.stringify({ type: "mute_state", on: true, source: "button" }),
+});
+const beforeMutedAudio = first.sent.length;
+topicMicCallback({
+  data: new Uint8Array([4]).buffer,
+});
+assert.equal(first.sent.length, beforeMutedAudio + 1);
+assert.equal(mute.textContent, "Unmute");
+assert.equal(mute.attributes.get("aria-pressed"), "true");
 
 const staleMicCallback = topicMicCallback;
 const firstSendCount = first.sent.length;
