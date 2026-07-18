@@ -1,7 +1,6 @@
 """Unit tests for the speaker-verification gate (no model downloads)."""
 
 import numpy as np
-import pytest
 
 from hermes_voice.kit.speaker_gate import SpeakerGate, SpeakerGateConfig
 
@@ -42,7 +41,7 @@ def test_verify_different_speaker_rejected(tmp_path) -> None:
     gate.enroll("alex", _vec(1.0, 0.0, 0.0))
     gate.enroll("partner", _vec(0.0, 1.0, 0.0))
     # a speaker orthogonal to both enrolled vectors
-    accepted, score, speaker = gate.verify(_vec(0.0, 0.0, 1.0))
+    accepted, score, _speaker = gate.verify(_vec(0.0, 0.0, 1.0))
     assert accepted is False
     assert score < 0.75
 
