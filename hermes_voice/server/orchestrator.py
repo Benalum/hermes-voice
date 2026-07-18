@@ -145,9 +145,15 @@ class Orchestrator:
 
     def feed_audio(self, pcm: bytes) -> None:
         prob = self._vad.probability(pcm)
+        muted = self._voice_mute.muted
         speaking = self._session.state is sm.State.SPEAKING
-        for turn_event in self._turns.feed(pcm, prob, speaking=speaking):
+        detect_barge_in = speaking and not muted
+        for turn_event in self._turns.feed(pcm, prob, speaking=detect_barge_in):
             match turn_event:
+                case SpeechEnd(pcm=utterance) if muted and speaking:
+                    # Command mute still listens for an unmute command, but muted
+                    # speech must never interrupt audio that is already playing.
+                    self._spawn(self._transcribe(utterance, command_only=True))
                 case SpeechEnd(pcm=utterance):
                     self.emit(sm.SpeechEnded(pcm=utterance))
                 case BargeIn():
@@ -218,7 +224,7 @@ class Orchestrator:
 
     # --- effect implementations ---
 
-    async def _transcribe(self, pcm: bytes) -> None:
+    async def _transcribe(self, pcm: bytes, *, command_only: bool = False) -> None:
         # Speaker gate: drop utterances that are not from an enrolled voice
         # before they reach STT. Runs in a worker thread (resemblyzer is sync).
         if self._speaker_gate is not None and self._speaker_gate.is_configured:
@@ -236,7 +242,8 @@ class Orchestrator:
                         len(pcm) / (16000 * 2),
                     )
                     if not accepted:
-                        self.emit(sm.SttCompleted(text=""))
+                        if not command_only:
+                            self.emit(sm.SttCompleted(text=""))
                         return
             except Exception:
                 logger.exception("speaker_gate: verification error (failing open)")
@@ -249,13 +256,15 @@ class Orchestrator:
         async with self._mute_lock:
             mute_result = self._voice_mute.handle(text)
             muted = self._voice_mute.muted
+        if mute_result.status is not None:
+            await self._send(MuteState(on=muted, source="voice"))
+            logger.warning(
+                "voice control: %s by spoken command",
+                "muted" if muted else "unmuted",
+            )
+        if command_only:
+            return
         if not mute_result.forward:
-            if mute_result.status is not None:
-                await self._send(MuteState(on=muted, source="voice"))
-                logger.warning(
-                    "voice control: %s by spoken command",
-                    "muted" if muted else "unmuted",
-                )
             self.emit(sm.SttCompleted(text=""))
             return
         self.emit(sm.SttCompleted(text=text))
