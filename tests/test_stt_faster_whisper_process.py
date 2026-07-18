@@ -271,6 +271,21 @@ def test_worker_response_read_times_out_on_partial_frame() -> None:
             )
 
 
+def test_threaded_worker_response_read_times_out_for_non_socket_pipe() -> None:
+    read_fd, write_fd = os.pipe()
+    try:
+        with (
+            os.fdopen(read_fd, "rb", buffering=0) as stream,
+            pytest.raises(
+                TimeoutError,
+                match="timed out waiting",
+            ),
+        ):
+            module._read_frame_with_thread_timeout(stream, 0.01)
+    finally:
+        os.close(write_fd)
+
+
 def test_transcription_timeout_closes_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
