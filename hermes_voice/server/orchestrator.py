@@ -17,8 +17,6 @@ from typing import Any
 from hermes_voice.kit import session as sm
 from hermes_voice.kit.normalize import normalize_for_speech
 from hermes_voice.kit.ports import ResponderPort, SttPort, TtsPort, VadPort
-from hermes_voice.kit.speaker_gate import SpeakerGate
-from hermes_voice.kit.voice_mute import VoiceMuteControl
 from hermes_voice.kit.protocol import (
     AgentText,
     MuteState,
@@ -30,7 +28,9 @@ from hermes_voice.kit.protocol import (
     encode_audio_frame,
     encode_server_msg,
 )
+from hermes_voice.kit.speaker_gate import SpeakerGate
 from hermes_voice.kit.turns import BargeIn, SpeechEnd, SpeechStart, TurnConfig, TurnManager
+from hermes_voice.kit.voice_mute import VoiceMuteControl
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class Orchestrator:
         make_responder: Callable[[Callable[[sm.Event], None]], ResponderPort],
         initial_chat: str,
         config: OrchestratorConfig | None = None,
-        speaker_gate: "SpeakerGate | None" = None,
+        speaker_gate: SpeakerGate | None = None,
     ) -> None:
         config = config or OrchestratorConfig()
         self._send_text = send_text
