@@ -1,5 +1,7 @@
 """Tests for spoken mute/unmute control."""
 
+import pytest
+
 from hermes_voice.kit.voice_mute import VoiceMuteControl
 
 
@@ -81,4 +83,55 @@ def test_incidental_mute_phrase_does_not_toggle() -> None:
 
     assert result.forward is True
     assert result.status is None
+    assert control.muted is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "Stop speech",
+        "Hermes stop speaking",
+        "Hey Hermes, please stop talking",
+        "Be quiet please",
+        "Cancel speech",
+        "Hermes stop",
+    ),
+)
+def test_stop_speech_commands_are_consumed_without_changing_mute(
+    command: str,
+) -> None:
+    control = VoiceMuteControl(muted=True)
+
+    result = control.handle(command)
+
+    assert result.forward is False
+    assert result.stop_speaking is True
+    assert result.status is None
+    assert control.muted is True
+
+
+def test_incidental_stop_speech_phrase_is_not_a_command() -> None:
+    control = VoiceMuteControl()
+
+    result = control.handle("Explain why someone might say stop speaking in a tutorial")
+
+    assert result.forward is True
+    assert result.stop_speaking is False
+
+
+def test_mute_myself_and_leading_filler_are_supported() -> None:
+    control = VoiceMuteControl()
+
+    result = control.handle("No, mute myself")
+
+    assert result.status == "muted"
+    assert control.muted is True
+
+
+def test_unmute_my_self_is_supported() -> None:
+    control = VoiceMuteControl(muted=True)
+
+    result = control.handle("Hermes unmute my self")
+
+    assert result.status == "unmuted"
     assert control.muted is False

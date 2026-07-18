@@ -27,9 +27,42 @@ class FakeClient:
     def __init__(self) -> None:
         self.handlers: list[tuple[Any, Any]] = []
         self.sent: list[tuple[Any, str, int | None]] = []
-        self.entities = {"@hermes_bot": types.User(id=111), 222: types.User(id=222)}
+        self.entities = {
+            "@hermes_bot": types.User(id=111),
+            222: types.User(id=222),
+            333: SimpleNamespace(id=333),
+            444: SimpleNamespace(id=444),
+        }
         self.next_message_id = 10
         self.requests: list[Any] = []
+        self.topic_error: Exception | None = None
+        self.dialog_limits: list[int] = []
+        self.dialogs = [
+            SimpleNamespace(
+                id=111,
+                name="Hermes",
+                entity=SimpleNamespace(id=111),
+                is_user=True,
+                is_group=False,
+                is_channel=False,
+            ),
+            SimpleNamespace(
+                id=333,
+                name="Family Group",
+                entity=SimpleNamespace(id=333),
+                is_user=False,
+                is_group=True,
+                is_channel=False,
+            ),
+            SimpleNamespace(
+                id=444,
+                name="News Channel",
+                entity=SimpleNamespace(id=444),
+                is_user=False,
+                is_group=False,
+                is_channel=True,
+            ),
+        ]
         self.topics = [
             SimpleNamespace(
                 id=105,
@@ -127,6 +160,12 @@ class FakeClient:
     async def get_entity(self, peer: Any) -> Any:
         return self.entities[peer]
 
+    async def get_dialogs(self, *, limit: int = 100, **_kwargs: Any) -> list[Any]:
+        self.dialog_limits.append(limit)
+        # Real Telethon returns a TotalList (a list-like collection), not an
+        # object with a `.dialogs` attribute.
+        return self.dialogs[:limit]
+
     async def get_input_entity(self, entity: Any) -> Any:
         return SimpleNamespace(entity=entity)
 
@@ -135,6 +174,8 @@ class FakeClient:
         request_name = type(request).__name__
 
         if request_name == "GetForumTopicsRequest":
+            if self.topic_error is not None:
+                raise self.topic_error
             query = request.q.casefold()
             topics = [
                 topic for topic in self.topics if not query or query in topic.title.casefold()
@@ -255,6 +296,15 @@ class TestTelegramRelay:
 
         assert [topic.title for topic in topics] == ["System"]
         assert client.requests[-1].q == "system"
+
+    async def test_chat_without_forum_topics_returns_an_empty_list(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+        client.topic_error = RuntimeError("The chat is not a forum")
+
+        topics = await relay.list_topics()
+
+        assert topics == ()
 
     async def test_topic_reads_require_active_chat_and_valid_limits(self) -> None:
         relay, _, _, _ = make_relay()
@@ -508,6 +558,36 @@ class TestTelegramRelay:
             assert len(client.handlers) == 3
             await relay.close()
             assert client.handlers == []
+
+
+class TestTelegramRelayChatDiscovery:
+    async def test_list_chats_accepts_telethon_total_list_shape(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+
+        chats = await relay.list_chats(limit=500)
+        keys = {item.key for item in chats}
+
+        assert {"hermes", "ops", "111", "333", "444"} <= keys
+        assert client.dialog_limits == [498]
+
+    async def test_list_chats_filters_case_insensitively(self) -> None:
+        relay, _, _, _ = make_relay()
+        await relay.reset("hermes")
+
+        chats = await relay.list_chats(query="family", limit=500)
+
+        assert [item.label for item in chats if item.kind != "config"] == ["Family Group"]
+
+    async def test_discovered_dialog_can_become_the_active_destination(self) -> None:
+        relay, client, _, _ = make_relay()
+        await relay.reset("hermes")
+
+        await relay.reset("333")
+        await relay.send("hi family")
+
+        assert relay._active_peer_id == 333
+        assert client.sent[-1][0].id == 333
 
 
 class TestTelegramRelayCleanupFailures:

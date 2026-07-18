@@ -367,6 +367,56 @@ class TestMutedPlayback:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
 
+    async def test_muted_stop_speech_command_stops_active_playback(self) -> None:
+        from hermes_voice.kit import session as sm
+        from hermes_voice.server.orchestrator import Orchestrator
+
+        sent: list[dict[str, Any]] = []
+        stt = FakeStt("Hermes stop speaking")
+
+        async def record_text(message: str) -> None:
+            sent.append(json.loads(message))
+
+        class LongTts:
+            async def synthesize(self, text: str) -> bytes:
+                return b"\x11\x22" * (24000 * 5)
+
+        orchestrator = Orchestrator(
+            send_text=record_text,
+            send_bytes=_ignore_bytes,
+            vad=FakeVad(),
+            stt=stt,
+            tts=LongTts(),
+            make_responder=lambda emit: _IgnoreResponder(),
+            initial_chat="hermes",
+        )
+        task = asyncio.create_task(orchestrator.run())
+        try:
+            await orchestrator.set_muted(True)
+            orchestrator.emit(sm.AgentSpeakable(text="a long reply", message_id=1))
+            for _ in range(100):
+                if any(message["type"] == "speak_start" for message in sent):
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("playback did not start")
+
+            for frame in [SPEECH_FRAME] * 4 + [SILENT_FRAME] * 16:
+                orchestrator.feed_audio(frame)
+            for _ in range(100):
+                if any(message["type"] == "speak_stop" and message["flush"] for message in sent):
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("muted stop-speech command did not stop playback")
+
+            assert not any(message.get("type") == "transcript" for message in sent)
+            assert orchestrator._voice_mute.muted is True
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
 
 class TopicResponder:
     def __init__(self, emit: Any) -> None:
@@ -424,6 +474,41 @@ class TestOrchestratorTopicControls:
             await orchestrator.dispatch(sm.ChatSelected(chat_key="ops"))
             assert holder["responder"].reset_calls == ["hermes", "ops"]
             assert holder["responder"].selected_topic is None
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    async def test_failed_chat_switch_restores_previous_session(self) -> None:
+        from hermes_voice.kit import session as sm
+        from hermes_voice.server.orchestrator import Orchestrator
+
+        class SwitchFailingResponder(TopicResponder):
+            async def reset(self, chat_key: str) -> None:
+                self.reset_calls.append(chat_key)
+                if chat_key == "unavailable":
+                    raise RuntimeError("chat unavailable")
+                self.selected_topic = None
+
+        orchestrator = Orchestrator(
+            send_text=_ignore_text,
+            send_bytes=_ignore_bytes,
+            vad=FakeVad(),
+            stt=FakeStt(),
+            tts=FakeTts(),
+            make_responder=SwitchFailingResponder,
+            initial_chat="hermes",
+        )
+        task = asyncio.create_task(orchestrator.run())
+        try:
+            await orchestrator.list_topics()
+
+            with pytest.raises(RuntimeError, match="chat unavailable"):
+                await orchestrator.dispatch(sm.ChatSelected(chat_key="unavailable"))
+
+            assert orchestrator._session.chat_key == "hermes"
+            assert not task.done()
+            assert await orchestrator.list_topics() == (":100",)
         finally:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

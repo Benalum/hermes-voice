@@ -123,6 +123,14 @@ class Orchestrator:
             raise RuntimeError("the active responder does not support Telegram topics")
         return tuple(await method(query=query, limit=limit))
 
+    async def list_chats(self, *, query: str = "", limit: int = 100) -> tuple[Any, ...]:
+        await self._wait_until_ready()
+        self._raise_if_stopped()
+        method = getattr(self._responder, "list_chats", None)
+        if not callable(method):
+            raise RuntimeError("the active responder does not support Telegram chats")
+        return tuple(await method(query=query, limit=limit))
+
     async def select_topic(self, topic_id: int) -> None:
         await self._wait_until_ready()
         self._raise_if_stopped()
@@ -201,9 +209,16 @@ class Orchestrator:
 
     async def _handle(self, event: sm.Event) -> None:
         before = self._session
-        self._session, effects = sm.advance(self._session, event)
-        for effect in effects:
-            await self._apply(effect)
+        next_session, effects = sm.advance(self._session, event)
+        self._session = next_session
+        try:
+            for effect in effects:
+                await self._apply(effect)
+        except Exception:
+            # Do not leave the state machine bound to a Telegram destination
+            # that the responder could not select.
+            self._session = before
+            raise
         if self._session.state is not before.state:
             await self._send(StateMsg(name=self._session.state.value))
         self._manage_wait_timer()
@@ -272,6 +287,8 @@ class Orchestrator:
                 "voice control: %s by spoken command",
                 "muted" if muted else "unmuted",
             )
+        if mute_result.stop_speaking:
+            self.emit(sm.CancelPressed())
         if command_only:
             return
         if not mute_result.forward:

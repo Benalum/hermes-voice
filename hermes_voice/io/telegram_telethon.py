@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 TICK_INTERVAL_S = 0.25
 MAX_TELEGRAM_PAGE_SIZE = 100
+MAX_CHAT_LIST_LIMIT = 500
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +33,14 @@ class TelegramTopic:
     top_message_id: int | None
     closed: bool
     pinned: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TelegramChat:
+    key: str
+    label: str
+    kind: str  # "config" | "user" | "group" | "channel"
+    peer_id: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +82,29 @@ class TelegramRelay:
     async def reset(self, chat_key: str) -> None:
         chat = self._chats.get(chat_key)
         if chat is None:
-            logger.warning("unknown chat key %r; keeping previous chat", chat_key)
+            peer_id = _parse_peer_id(chat_key)
+            if peer_id is None:
+                logger.warning("unknown chat key %r; keeping previous chat", chat_key)
+                return
+            self._entity = await self._client.get_entity(peer_id)
+            self._active_peer_id = _peer_id_for(self._entity, fallback=peer_id)
+            chat = ChatConfig(
+                key=chat_key,
+                peer=peer_id,
+                label=str(chat_key),
+                max_wait_s=self._default_wait_s(),
+            )
+            self._active_chat = chat
+            self._active_topic_id = None
+            self._aggregator.reset()
+            self._install_handlers()
+            if self._ticker is None or self._ticker.done():
+                self._ticker = asyncio.create_task(self._run_ticker())
+            logger.info(
+                "voice session bound to discovered chat %r (peer id %s)",
+                chat_key,
+                self._active_peer_id,
+            )
             return
         from telethon import utils
 
@@ -86,6 +117,89 @@ class TelegramRelay:
         if self._ticker is None or self._ticker.done():
             self._ticker = asyncio.create_task(self._run_ticker())
         logger.info("voice session bound to chat %r (peer id %s)", chat_key, self._active_peer_id)
+
+    def _default_wait_s(self) -> float:
+        if self._chats:
+            return next(iter(self._chats.values())).max_wait_s
+        return 180.0
+
+    async def list_chats(
+        self,
+        *,
+        query: str = "",
+        limit: int = MAX_CHAT_LIST_LIMIT,
+    ) -> tuple[TelegramChat, ...]:
+        _validate_chat_limit(limit)
+        items = [
+            TelegramChat(key=key, label=chat.label, kind="config", peer_id=None)
+            for key, chat in self._chats.items()
+        ]
+        discovered = await self._list_discovered_chats(
+            query=query,
+            limit=max(0, limit - len(items)),
+        )
+        items.extend(discovered)
+        return tuple(items[:limit])
+
+    async def _list_discovered_chats(
+        self,
+        *,
+        query: str,
+        limit: int,
+    ) -> list[TelegramChat]:
+        get_dialogs = getattr(self._client, "get_dialogs", None)
+        if not callable(get_dialogs) or limit <= 0:
+            return []
+        try:
+            result = await get_dialogs(limit=limit)
+        except Exception:
+            logger.exception("failed to list Telegram dialogs")
+            return []
+
+        dialogs = _dialog_items(result)
+        q = query.strip().casefold()
+        out: list[TelegramChat] = []
+        for dialog in dialogs:
+            entity = getattr(dialog, "entity", None)
+            if entity is None:
+                continue
+            title = (
+                getattr(dialog, "name", None)
+                or getattr(entity, "title", None)
+                or getattr(entity, "first_name", None)
+                or getattr(entity, "username", None)
+            )
+            if not isinstance(title, str) or not title.strip():
+                continue
+            if q and q not in title.casefold():
+                continue
+
+            dialog_id = getattr(dialog, "id", None)
+            peer_id = _peer_id_for(
+                entity,
+                fallback=dialog_id if isinstance(dialog_id, int) else None,
+            )
+            if peer_id is None:
+                continue
+            if getattr(dialog, "is_user", False):
+                kind = "user"
+            elif getattr(dialog, "is_channel", False):
+                kind = "channel"
+            elif getattr(dialog, "is_group", False):
+                kind = "group"
+            else:
+                kind = "user"
+            out.append(
+                TelegramChat(
+                    key=str(peer_id),
+                    label=title.strip(),
+                    kind=kind,
+                    peer_id=peer_id,
+                )
+            )
+            if len(out) >= limit:
+                break
+        return out
 
     async def select_topic(self, topic_id: int | None) -> None:
         if topic_id is not None and topic_id <= 0:
@@ -106,19 +220,29 @@ class TelegramRelay:
         _validate_limit(limit)
         entity = self._require_entity()
 
-        from telethon.tl import functions
+        if getattr(entity, "forum", None) is False:
+            return ()
 
-        input_peer = await self._client.get_input_entity(entity)
-        result = await self._client(
-            functions.messages.GetForumTopicsRequest(
-                peer=input_peer,
-                offset_date=None,
-                offset_id=0,
-                offset_topic=0,
-                limit=limit,
-                q=query.strip(),
+        try:
+            from telethon.tl import functions
+
+            input_peer = await self._client.get_input_entity(entity)
+            result = await self._client(
+                functions.messages.GetForumTopicsRequest(
+                    peer=input_peer,
+                    offset_date=None,
+                    offset_id=0,
+                    offset_topic=0,
+                    limit=limit,
+                    q=query.strip(),
+                )
             )
-        )
+        except Exception:
+            # Users and ordinary groups do not support Telegram forum topics.
+            # Treat that as a valid topic-less chat instead of terminating the
+            # voice WebSocket when Telegram rejects GetForumTopicsRequest.
+            logger.info("active Telegram chat does not expose forum topics")
+            return ()
 
         topics: list[TelegramTopic] = []
         for item in getattr(result, "topics", []):
@@ -275,6 +399,39 @@ class TelegramRelay:
 def _validate_limit(limit: int) -> None:
     if not 1 <= limit <= MAX_TELEGRAM_PAGE_SIZE:
         raise ValueError(f"limit must be between 1 and {MAX_TELEGRAM_PAGE_SIZE}, inclusive")
+
+
+def _validate_chat_limit(limit: int) -> None:
+    if not 1 <= limit <= MAX_CHAT_LIST_LIMIT:
+        raise ValueError(f"limit must be between 1 and {MAX_CHAT_LIST_LIMIT}, inclusive")
+
+
+def _parse_peer_id(value: str) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _peer_id_for(entity: Any, *, fallback: int | None = None) -> int | None:
+    try:
+        from telethon import utils
+
+        return int(utils.get_peer_id(entity))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _dialog_items(result: Any) -> list[Any]:
+    nested = getattr(result, "dialogs", None)
+    if nested is None:
+        nested = getattr(result, "chats", None)
+    if nested is not None:
+        return list(nested)
+    try:
+        return list(result)
+    except TypeError:
+        return []
 
 
 def _topic_from_telegram(item: Any) -> TelegramTopic | None:

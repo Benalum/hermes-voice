@@ -8,9 +8,9 @@ Hermes Voice provides two related local controls:
 - **Command mute** continues local STT only so an unmute command can be found,
   while suppressing every ordinary transcript before Telegram or the agent.
 
-These controls share the server as their authority. Clicking the browser button
-or saying a command changes the same mute state, and the browser updates after
-the server acknowledges that state.
+These controls share the server as their authority. Clicking the sticky browser
+mute indicator or saying a command changes the same mute state, and the browser
+updates after the server acknowledges that state.
 
 ## Privacy boundary
 
@@ -19,13 +19,13 @@ Command mute is not a hard microphone mute.
 | State | Browser sends audio to Hermes server | Local STT runs | Ordinary transcript reaches Telegram or the agent | Speech can interrupt reply playback |
 |---|---:|---:|---:|---:|
 | Unmuted | Yes | Yes | Yes | Yes |
-| Command-muted | Yes | Yes, to detect unmute | No | No |
+| Command-muted | Yes | Yes, to detect control commands | No | Only for an explicit stop-speech command |
 | Browser/OS microphone disabled | No | No | No | No |
 
 Use the browser or operating-system microphone control when audio must not leave
 the client device. Command mute is intended for hands-free pause/resume control:
 audio stops at the Hermes Voice server, but the server must still listen for
-“unmute me.”
+“unmute me” and “stop speech.”
 
 ## Install speaker-filter support
 
@@ -126,7 +126,7 @@ curl -fsS http://127.0.0.1:8990/healthz
 journalctl -fu hermes-voice.service
 ```
 
-## Voice commands and browser button
+## Voice commands and sticky mute indicator
 
 The command recognizer accepts a complete command rather than triggering on a
 phrase embedded in an ordinary sentence. Examples include:
@@ -138,19 +138,27 @@ phrase embedded in an ordinary sentence. Examples include:
 - `Hermes unmute me`
 - `Start listening`
 - `Hermes, can you listen to me please`
+- `Stop speech`
+- `Hermes stop speaking`
+- `Hey Hermes, please stop talking`
+- `Be quiet please`
 
 While unmuted, a mute command switches to command mute and is not forwarded.
-While muted, ordinary speech is discarded at the server; only an unmute command
-changes the state. The browser button follows the same rules:
+While muted, ordinary speech is discarded at the server. An unmute command
+resumes forwarding, while a stop-speech command stops the current agent reply
+and leaves the session muted. The sticky browser mute indicator follows the same
+state:
 
-- Clicking **Mute** keeps the WebSocket and microphone capture active.
-- The server acknowledges the state and the button changes to **Unmute**.
-- Saying “Hermes unmute me” can unmute a session that was muted by the button.
-- Clicking **Unmute** can unmute a session that was muted by voice.
+- Clicking **Unmuted** keeps the WebSocket and microphone capture active and
+  switches the indicator to **Muted** after server acknowledgement.
+- Saying “Hermes unmute me” can unmute a session that was muted by the indicator.
+- Clicking **Muted** can unmute a session that was muted by voice.
 - Saying “Hermes mute me” during a reply mutes the session without stopping that
   reply; command recognition is resolved before a pending barge-in is applied.
-- Muted speech never triggers barge-in or stops reply playback. Once unmuted,
-  speaking during playback can interrupt it normally.
+- Ordinary muted speech never triggers barge-in or stops reply playback.
+- Saying “Stop speech” or “Hermes stop speaking” while muted stops reply playback
+  immediately without forwarding the command or changing the muted state.
+- Once unmuted, speaking during playback can interrupt it normally.
 
 Mute state belongs to the current voice session and is reset when a new session
 connects.
@@ -208,6 +216,7 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-The orchestrator tests cover button/voice synchronization, suppression of muted
-transcripts, spoken unmute after button mute, and the rule that muted speech does
-not interrupt active playback.
+The orchestrator tests cover indicator/voice synchronization, suppression of
+muted transcripts, spoken unmute after indicator mute, ordinary muted speech not
+interrupting active playback, and stop-speech commands interrupting playback
+without unmuting.

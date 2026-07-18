@@ -28,8 +28,10 @@ from hermes_voice.kit import session as sm
 from hermes_voice.kit.ports import ResponderPort, SttPort, TtsPort, VadPort
 from hermes_voice.kit.protocol import (
     Cancel,
+    Chats,
     ErrorMsg,
     Hello,
+    ListChats,
     ListTopics,
     Mute,
     ProtocolError,
@@ -249,6 +251,13 @@ async def _run_voice_session(
                 match msg:
                     case SelectChat(chat_key=chat_key):
                         await orchestrator.dispatch(sm.ChatSelected(chat_key=chat_key))
+                    case ListChats(query=query, limit=limit):
+                        chats = await orchestrator.list_chats(query=query, limit=limit)
+                        await ws.send_text(
+                            encode_server_msg(
+                                Chats(items=tuple(_chat_payload(chat) for chat in chats))
+                            )
+                        )
                     case ListTopics(query=query, limit=limit):
                         topics = await orchestrator.list_topics(query=query, limit=limit)
                         await ws.send_text(
@@ -279,7 +288,8 @@ async def _run_voice_session(
                         await orchestrator.set_muted(on, source="button")
                     case Hello():
                         pass
-            except (RuntimeError, ValueError) as exc:
+            except Exception as exc:
+                logger.exception("voice control request failed")
                 await ws.send_text(encode_server_msg(ErrorMsg(message=str(exc))))
     finally:
         if receive_task is not None and not receive_task.done():
@@ -290,6 +300,15 @@ async def _run_voice_session(
             run_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await run_task
+
+
+def _chat_payload(chat: Any) -> dict[str, object]:
+    return {
+        "key": chat.key,
+        "label": chat.label,
+        "kind": chat.kind,
+        "peer_id": chat.peer_id,
+    }
 
 
 def _topic_payload(topic: Any) -> dict[str, object]:

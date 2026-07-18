@@ -13,16 +13,30 @@ from dataclasses import dataclass
 _WAKE_PREFIX = r"(?:(?:hey|ok|okay)\s+)?(?:hermes\s+)?"
 _REQUEST_PREFIX = r"(?:(?:please\s+)|(?:(?:can|could|would)\s+you\s+))?"
 _POLITE_SUFFIX = r"(?:\s+please)?"
+# Short filler that Whisper often prepends to a command ("no, mute me",
+# "yeah mute me"). Kept tiny so a sentence merely *about* muting still
+# forwards.
+_LEADING_FILLER = r"(?:(?:no|yes|yeah|now|just|but)\s+)?"
+_MYSELF = r"(?:me|myself|my\s*self)"
 
 _MUTE_PATTERN = re.compile(
-    rf"^{_WAKE_PREFIX}{_REQUEST_PREFIX}"
-    rf"(?:mute(?:\s+me)?|stop\s+listening(?:\s+to\s+me)?)"
+    rf"^{_WAKE_PREFIX}{_LEADING_FILLER}{_REQUEST_PREFIX}"
+    rf"(?:mute(?:\s+{_MYSELF})?|stop\s+listening(?:\s+to\s+{_MYSELF})?)"
     rf"{_POLITE_SUFFIX}$"
 )
 _UNMUTE_PATTERN = re.compile(
-    rf"^{_WAKE_PREFIX}{_REQUEST_PREFIX}"
-    rf"(?:unmute(?:\s+me)?|start\s+listening(?:\s+to\s+me)?|listen\s+to\s+me)"
+    rf"^{_WAKE_PREFIX}{_LEADING_FILLER}{_REQUEST_PREFIX}"
+    rf"(?:unmute(?:\s+{_MYSELF})?|start\s+listening(?:\s+to\s+{_MYSELF})?|listen\s+to\s+{_MYSELF})"
     rf"{_POLITE_SUFFIX}$"
+)
+_STOP_SPEECH_PATTERN = re.compile(
+    rf"^{_WAKE_PREFIX}{_LEADING_FILLER}{_REQUEST_PREFIX}"
+    rf"(?:stop\s+(?:speech|speaking|talking)|be\s+quiet|quiet|silence|"
+    rf"cancel\s+(?:speech|speaking|talking))"
+    rf"{_POLITE_SUFFIX}$"
+)
+_HERMES_STOP_PATTERN = re.compile(
+    rf"^(?:(?:hey|ok|okay)\s+)?hermes\s+{_REQUEST_PREFIX}stop{_POLITE_SUFFIX}$"
 )
 
 
@@ -35,6 +49,7 @@ def _normalize_command(text: str) -> str:
 class MuteResult:
     forward: bool
     status: str | None = None
+    stop_speaking: bool = False
 
 
 class VoiceMuteControl:
@@ -50,6 +65,9 @@ class VoiceMuteControl:
 
     def handle(self, text: str) -> MuteResult:
         command = _normalize_command(text)
+
+        if _STOP_SPEECH_PATTERN.fullmatch(command) or _HERMES_STOP_PATTERN.fullmatch(command):
+            return MuteResult(forward=False, stop_speaking=True)
 
         if not self.muted and _MUTE_PATTERN.fullmatch(command):
             return self.set_muted(True)
