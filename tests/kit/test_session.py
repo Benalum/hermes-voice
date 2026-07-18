@@ -1,6 +1,7 @@
 from hermes_voice.kit.session import (
     AgentSpeakable,
     BargedIn,
+    BargeInTranscribed,
     CancelPressed,
     ChatSelected,
     EnqueueSpeech,
@@ -44,9 +45,7 @@ class TestChatBinding:
         assert effects == (StopSpeaking(), ResetReplies(chat_key="ops"))
 
     def test_events_in_idle_are_ignored(self) -> None:
-        session, effects = advance(
-            Session.initial(), SpeechEnded(pcm=b"x")
-        )
+        session, effects = advance(Session.initial(), SpeechEnded(pcm=b"x"))
         assert session == Session.initial()
         assert effects == ()
 
@@ -131,6 +130,29 @@ class TestInterruptions:
         assert session == make(State.LISTENING, turn_open=True)
         assert effects == (StopSpeaking(),)
 
+    def test_transcribed_barge_in_stops_speech_and_relays_text(self) -> None:
+        session, effects = advance(
+            make(State.SPEAKING, turn_open=True),
+            BargeInTranscribed(text="interrupting request"),
+        )
+        assert session == make(State.WAITING, turn_open=True)
+        assert effects == (
+            StopSpeaking(),
+            SendTranscript(text="interrupting request"),
+            RelaySend(text="interrupting request"),
+        )
+
+    def test_transcribed_barge_in_after_playback_still_relays_text(self) -> None:
+        session, effects = advance(
+            make(State.LISTENING),
+            BargeInTranscribed(text="late interrupting request"),
+        )
+        assert session == make(State.WAITING, turn_open=True)
+        assert effects == (
+            SendTranscript(text="late interrupting request"),
+            RelaySend(text="late interrupting request"),
+        )
+
     def test_cancel_while_speaking_with_open_turn_goes_to_waiting(self) -> None:
         session, effects = advance(make(State.SPEAKING, turn_open=True), CancelPressed())
         assert session == make(State.WAITING, turn_open=True)
@@ -149,9 +171,7 @@ class TestInterruptions:
 
 class TestFollowUpsAndTimeout:
     def test_follow_up_speech_while_waiting_transcribes(self) -> None:
-        session, effects = advance(
-            make(State.WAITING, turn_open=True), SpeechEnded(pcm=b"more")
-        )
+        session, effects = advance(make(State.WAITING, turn_open=True), SpeechEnded(pcm=b"more"))
         assert session == make(State.TRANSCRIBING, turn_open=True)
         assert effects == (Transcribe(pcm=b"more"),)
 
