@@ -117,9 +117,7 @@ class TestParrotLoop:
             drive_utterance(ws)
             muted_controls, _ = collect_until_listening(ws)
             assert any(
-                c.get("type") == "transcript"
-                and c.get("role") == "system"
-                and c.get("text") == "Voice muted"
+                c == {"type": "mute_state", "on": True, "source": "voice"}
                 for c in muted_controls
             )
             assert not any(c.get("role") == "user" for c in muted_controls)
@@ -135,9 +133,7 @@ class TestParrotLoop:
             drive_utterance(ws)
             unmuted_controls, _ = collect_until_listening(ws)
             assert any(
-                c.get("type") == "transcript"
-                and c.get("role") == "system"
-                and c.get("text") == "Voice unmuted"
+                c == {"type": "mute_state", "on": False, "source": "voice"}
                 for c in unmuted_controls
             )
 
@@ -151,6 +147,46 @@ class TestParrotLoop:
                 for c in resumed_controls
             )
             assert any(c["type"] == "agent_text" for c in resumed_controls)
+
+    def test_button_mute_still_accepts_spoken_unmute(self) -> None:
+        client, stt = open_session(stt_text="Private speech")
+        with client.websocket_connect("/ws") as ws:
+            ws.send_text('{"type": "hello", "token": ""}')
+            ws.receive_text()  # ready
+            assert json.loads(ws.receive_text()) == {
+                "type": "mute_state",
+                "on": False,
+                "source": "session",
+            }
+
+            ws.send_text('{"type": "mute", "on": true}')
+            assert json.loads(ws.receive_text()) == {
+                "type": "mute_state",
+                "on": True,
+                "source": "button",
+            }
+
+            drive_utterance(ws)
+            private_controls, _ = collect_until_listening(ws)
+            assert not any(c.get("role") == "user" for c in private_controls)
+            assert not any(c["type"] == "agent_text" for c in private_controls)
+
+            stt.text = "Unmute me"
+            drive_utterance(ws)
+            unmuted_controls, _ = collect_until_listening(ws)
+            assert any(
+                c == {"type": "mute_state", "on": False, "source": "voice"}
+                for c in unmuted_controls
+            )
+
+            stt.text = "Hello after button mute"
+            drive_utterance(ws)
+            resumed_controls, _ = collect_until_listening(ws)
+            assert any(
+                c.get("role") == "user"
+                and c.get("text") == "Hello after button mute"
+                for c in resumed_controls
+            )
 
     def test_state_progression_covers_full_loop(self) -> None:
         client, _ = open_session()
