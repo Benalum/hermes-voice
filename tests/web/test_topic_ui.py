@@ -28,7 +28,8 @@ def test_microphone_audio_waits_for_selected_topic_history() -> None:
     # verify_main_connection_lifecycle.mjs. These checks retain the
     # browser-state contract without depending on indentation.
     assert "!topicMode || topicReady" in MAIN
-    assert "&& !muted" in MAIN
+    # Command mute keeps audio flowing to local STT so spoken unmute works.
+    assert "&& !muted" not in MAIN
     assert "selectedTopicId = msg.topic_id" in MAIN
     assert "topicReady = true" in MAIN
 
