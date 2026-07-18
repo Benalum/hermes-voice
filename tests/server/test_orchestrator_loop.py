@@ -117,8 +117,7 @@ class TestParrotLoop:
             drive_utterance(ws)
             muted_controls, _ = collect_until_listening(ws)
             assert any(
-                c == {"type": "mute_state", "on": True, "source": "voice"}
-                for c in muted_controls
+                c == {"type": "mute_state", "on": True, "source": "voice"} for c in muted_controls
             )
             assert not any(c.get("role") == "user" for c in muted_controls)
             assert not any(c["type"] == "agent_text" for c in muted_controls)
@@ -183,8 +182,7 @@ class TestParrotLoop:
             drive_utterance(ws)
             resumed_controls, _ = collect_until_listening(ws)
             assert any(
-                c.get("role") == "user"
-                and c.get("text") == "Hello after button mute"
+                c.get("role") == "user" and c.get("text") == "Hello after button mute"
                 for c in resumed_controls
             )
 
@@ -243,18 +241,14 @@ class TestMutedPlayback:
             else:
                 pytest.fail("muted utterance did not reach command-only STT")
 
-            assert not any(
-                message["type"] == "speak_stop" and message["flush"]
-                for message in sent
-            )
+            assert not any(message["type"] == "speak_stop" and message["flush"] for message in sent)
 
             stt.text = "Hermes unmute me"
             for frame in [SPEECH_FRAME] * 4 + [SILENT_FRAME] * 16:
                 orchestrator.feed_audio(frame)
             for _ in range(100):
                 if any(
-                    message
-                    == {"type": "mute_state", "on": False, "source": "voice"}
+                    message == {"type": "mute_state", "on": False, "source": "voice"}
                     for message in sent
                 ):
                     break
@@ -262,10 +256,7 @@ class TestMutedPlayback:
             else:
                 pytest.fail("spoken unmute was not accepted during playback")
 
-            assert not any(
-                message["type"] == "speak_stop" and message["flush"]
-                for message in sent
-            )
+            assert not any(message["type"] == "speak_stop" and message["flush"] for message in sent)
         finally:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -412,6 +403,7 @@ class _RecordingStt:
 class TestSpeakerGateIntegration:
     async def test_rejected_utterance_never_reaches_stt(self, tmp_path) -> None:
         import numpy as np
+
         from hermes_voice.kit import session as sm
         from hermes_voice.kit.speaker_gate import SpeakerGate, SpeakerGateConfig
         from hermes_voice.server.orchestrator import Orchestrator
