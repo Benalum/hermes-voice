@@ -18,7 +18,14 @@ def _run_node_script(script: str, *, module_default: bool = False) -> None:
     repository = Path(__file__).resolve().parents[2]
     command = [node]
     if module_default:
-        command.append("--experimental-default-type=module")
+        option_probe = subprocess.run(
+            [node, "--experimental-default-type=module", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if option_probe.returncode == 0:
+            command.append("--experimental-default-type=module")
     command.append(str(repository / "tests/web" / script))
     result = subprocess.run(
         command,
