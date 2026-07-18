@@ -21,6 +21,7 @@ from hermes_voice.kit.speaker_gate import SpeakerGate
 from hermes_voice.kit.voice_mute import VoiceMuteControl
 from hermes_voice.kit.protocol import (
     AgentText,
+    MuteState,
     ServerMsg,
     SpeakStart,
     SpeakStop,
@@ -74,6 +75,7 @@ class Orchestrator:
         self._tts = tts
         self._speaker_gate = speaker_gate
         self._voice_mute = VoiceMuteControl()
+        self._mute_lock = asyncio.Lock()
         self._config = config
         self._session = sm.Session(state=sm.State.LISTENING, turn_open=False, chat_key=initial_chat)
         self._turns = TurnManager(config.turn)
@@ -101,6 +103,16 @@ class Orchestrator:
         future = asyncio.get_running_loop().create_future()
         self._events.put_nowait((event, future))
         await future
+
+    async def set_muted(self, on: bool, *, source: str = "button") -> None:
+        """Set command-only mute and acknowledge the authoritative state."""
+        await self._wait_until_ready()
+        self._raise_if_stopped()
+        async with self._mute_lock:
+            self._voice_mute.set_muted(on)
+            muted = self._voice_mute.muted
+        await self._send(MuteState(on=muted, source=source))
+        logger.warning("voice control: %s by %s", "muted" if muted else "unmuted", source)
 
     async def list_topics(self, *, query: str = "", limit: int = 100) -> tuple[Any, ...]:
         await self._wait_until_ready()
@@ -153,6 +165,7 @@ class Orchestrator:
     async def run(self) -> None:
         try:
             await self._responder.reset(self._session.chat_key or "")
+            await self._send(MuteState(on=self._voice_mute.muted, source="session"))
             self._ready.set()
             while True:
                 event, future = await self._events.get()
@@ -233,14 +246,16 @@ class Orchestrator:
             logger.exception("STT failed")
             text = ""
 
-        mute_result = self._voice_mute.handle(text)
+        async with self._mute_lock:
+            mute_result = self._voice_mute.handle(text)
+            muted = self._voice_mute.muted
         if not mute_result.forward:
-            if mute_result.status == "muted":
-                await self._send(Transcript(role="system", text="Voice muted", final=True))
-                logger.info("voice control: muted; subsequent speech stays local")
-            elif mute_result.status == "unmuted":
-                await self._send(Transcript(role="system", text="Voice unmuted", final=True))
-                logger.info("voice control: unmuted")
+            if mute_result.status is not None:
+                await self._send(MuteState(on=muted, source="voice"))
+                logger.warning(
+                    "voice control: %s by spoken command",
+                    "muted" if muted else "unmuted",
+                )
             self.emit(sm.SttCompleted(text=""))
             return
         self.emit(sm.SttCompleted(text=text))
