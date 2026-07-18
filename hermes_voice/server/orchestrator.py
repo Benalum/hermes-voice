@@ -85,6 +85,7 @@ class Orchestrator:
         self._failure: Exception | None = None
         self._epoch = 1
         self._speech_texts: deque[str] = deque()
+        self._pending_barge_in = False
         self._tts_task: asyncio.Task[None] | None = None
         self._wait_timer: asyncio.Task[None] | None = None
         self._side_tasks: set[asyncio.Task[None]] = set()
@@ -150,6 +151,9 @@ class Orchestrator:
         detect_barge_in = speaking and not muted
         for turn_event in self._turns.feed(pcm, prob, speaking=detect_barge_in):
             match turn_event:
+                case SpeechEnd(pcm=utterance) if self._pending_barge_in:
+                    self._pending_barge_in = False
+                    self._spawn(self._transcribe(utterance, barge_in=True))
                 case SpeechEnd(pcm=utterance) if muted and speaking:
                     # Command mute still listens for an unmute command, but muted
                     # speech must never interrupt audio that is already playing.
@@ -157,12 +161,12 @@ class Orchestrator:
                 case SpeechEnd(pcm=utterance):
                     self.emit(sm.SpeechEnded(pcm=utterance))
                 case BargeIn():
+                    self._pending_barge_in = True
                     logger.info(
-                        "barge-in detected while speaking (threshold=%.2f, frames=%d)",
+                        "barge-in candidate detected while speaking (threshold=%.2f, frames=%d)",
                         self._config.turn.barge_threshold,
                         self._config.turn.barge_frames,
                     )
-                    self.emit(sm.BargedIn())
                 case SpeechStart():
                     pass
 
@@ -224,7 +228,13 @@ class Orchestrator:
 
     # --- effect implementations ---
 
-    async def _transcribe(self, pcm: bytes, *, command_only: bool = False) -> None:
+    async def _transcribe(
+        self,
+        pcm: bytes,
+        *,
+        command_only: bool = False,
+        barge_in: bool = False,
+    ) -> None:
         # Speaker gate: drop utterances that are not from an enrolled voice
         # before they reach STT. Runs in a worker thread (resemblyzer is sync).
         if self._speaker_gate is not None and self._speaker_gate.is_configured:
@@ -242,7 +252,7 @@ class Orchestrator:
                         len(pcm) / (16000 * 2),
                     )
                     if not accepted:
-                        if not command_only:
+                        if not command_only and not barge_in:
                             self.emit(sm.SttCompleted(text=""))
                         return
             except Exception:
@@ -265,7 +275,11 @@ class Orchestrator:
         if command_only:
             return
         if not mute_result.forward:
-            self.emit(sm.SttCompleted(text=""))
+            if not barge_in:
+                self.emit(sm.SttCompleted(text=""))
+            return
+        if barge_in:
+            self.emit(sm.BargeInTranscribed(text=text))
             return
         self.emit(sm.SttCompleted(text=text))
 
