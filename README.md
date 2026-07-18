@@ -88,6 +88,22 @@ uv run uvicorn hermes_voice.server.app:create_app --factory --host 127.0.0.1 --p
 
 Open `http://127.0.0.1:8990/` and press **Start**.
 
+## Speaker filtering and command mute
+
+Hermes Voice can optionally reject utterances that do not match an enrolled
+speaker before speech-to-text runs. It also supports synchronized browser and
+spoken command mute controls. Say **“Hermes mute me”** to suppress ordinary
+transcripts at the server, then **“Hermes unmute me”** to resume forwarding.
+
+Command mute deliberately keeps the browser microphone stream connected so the
+server can recognize an unmute command locally. Muted speech is not relayed to
+Telegram or the agent, and it does not interrupt reply playback. Use the
+operating system or browser microphone control when no audio may leave the
+device at all.
+
+See [Speaker filtering and voice mute](docs/speaker-filtering-and-voice-mute.md)
+for installation, enrollment, calibration, privacy behavior, and troubleshooting.
+
 ## Automated platform verification
 
 The repository includes:
@@ -130,4 +146,5 @@ replacement is explicitly requested. It uses Tailscale Serve, never Funnel.
 - Keep the gateway bound to loopback.
 - Use Tailscale Serve or an SSH tunnel for remote browser access.
 - Treat the Hermes Voice gateway token, Telegram API hash, BotFather token, and Telethon session as secrets.
+- Treat speaker enrollment WAVs and `speakers.json` as sensitive voice data; never commit them.
 - `HV_MAX_SPOKEN_CHARS=0` disables character truncation; use a positive limit when unbounded speech is undesirable.
