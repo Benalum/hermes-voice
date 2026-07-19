@@ -1,0 +1,11 @@
+token = "replace-with-a-random-browser-token-of-at-least-32-bytes"
+
+[telegram]
+api_id = 0
+api_hash = "replace-with-my-telegram-api-hash"
+session_path = "/home/hermes/.hermes-voice/hermes.session"
+
+[chats.hermes]
+peer = "@replace_with_hermes2_bot"
+label = "Hermes2"
+max_wait_s = 180

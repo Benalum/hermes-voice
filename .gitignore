@@ -12,6 +12,10 @@ dist/
 
 reports/real-machine/
 
+# Portable container deployment state and secrets.
+.env
+deploy/compose/state/
+
 # Local speaker-verification recordings and profiles are sensitive.
 *-enrollment.wav
 *-verification.wav

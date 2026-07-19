@@ -8,11 +8,11 @@ import sys
 
 from hermes_voice.kit.ports import SttPort, TtsPort, VadPort
 
-_VALID_BACKENDS = {"auto", "mlx", "portable"}
+_VALID_BACKENDS = {"auto", "mlx", "portable", "remote"}
 
 
 def detect_speech_backend() -> str:
-    """Return either 'mlx' or 'portable' for the current host."""
+    """Return 'mlx', 'portable', or the explicitly selected 'remote'."""
 
     requested = (
         os.environ.get(
@@ -41,6 +41,9 @@ def detect_speech_backend() -> str:
     if requested == "portable":
         return "portable"
 
+    if requested == "remote":
+        return "remote"
+
     # Automatic selection:
 
     # Apple Silicon uses MLX; Ubuntu/Linux and other systems use portable.
@@ -54,6 +57,11 @@ def build_speech_ports() -> tuple[VadPort, SttPort, TtsPort]:
     from hermes_voice.io.vad_silero import SileroVad
 
     backend = detect_speech_backend()
+
+    if backend == "remote":
+        from hermes_voice.io.remote_speech import build_remote_speech_ports
+
+        return build_remote_speech_ports()
 
     if backend == "mlx":
         from hermes_voice.io.stt_parakeet import ParakeetStt

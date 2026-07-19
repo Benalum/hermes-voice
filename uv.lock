@@ -799,10 +799,11 @@ wheels = [
 
 [[package]]
 name = "hermes-voice"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "telethon" },
@@ -877,6 +878,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "faster-whisper", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=1.2" },
     { name = "faster-whisper", marker = "extra == 'speech-portable'", specifier = ">=1.2" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "kokoro", marker = "(platform_machine != 'aarch64' and platform_machine != 'arm64' and sys_platform == 'darwin' and extra == 'speech') or (sys_platform == 'linux' and extra == 'speech')", specifier = ">=0.9" },
     { name = "kokoro", marker = "extra == 'speech-portable'", specifier = ">=0.9" },
     { name = "llvmlite", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'speech'", specifier = "==0.43.0" },
