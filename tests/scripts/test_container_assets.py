@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -25,6 +28,7 @@ def test_compose_keeps_public_ports_on_loopback() -> None:
     assert "deploy/compose/state/hermes2-agent:/opt/data" in compose
 
 
+@pytest.mark.skipif(os.name == "nt", reason="the configurator runs inside a Linux host")
 def test_agent_configurator_is_valid_bash() -> None:
     script = ROOT / "deploy" / "compose" / "configure-agent.sh"
     subprocess.run(["bash", "-n", str(script)], check=True)

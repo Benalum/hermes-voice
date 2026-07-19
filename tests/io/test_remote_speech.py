@@ -103,24 +103,22 @@ async def test_tts_rejects_wrong_audio_format() -> None:
         await remote.close()
 
 
-@pytest.mark.asyncio
-async def test_remote_settings_are_loaded_from_environment() -> None:
-    with patch.dict(
-        "os.environ",
-        {
-            "HV_SPEECH_SERVICE_URL": "http://192.168.0.201:9000/",
-            "HV_SPEECH_CLIENT_ID": "hermes1",
-            "HV_SPEECH_SERVICE_TOKEN": TOKEN,
-            "HV_SPEECH_REQUEST_TIMEOUT_SECONDS": "30",
-        },
-        clear=True,
+def test_remote_settings_are_loaded_from_environment() -> None:
+    environment = {
+        "HV_SPEECH_SERVICE_URL": "http://192.168.0.201:9000/",
+        "HV_SPEECH_CLIENT_ID": "hermes1",
+        "HV_SPEECH_SERVICE_TOKEN": TOKEN,
+        "HV_SPEECH_REQUEST_TIMEOUT_SECONDS": "30",
+    }
+    with (
+        patch.dict("os.environ", environment, clear=True),
+        patch("hermes_voice.io.remote_speech.httpx.AsyncClient") as async_client,
+        patch("hermes_voice.io.remote_speech.httpx.Client"),
     ):
         remote = RemoteSpeechPorts.from_env()
 
-    try:
-        assert remote._async_client.base_url == httpx.URL("http://192.168.0.201:9000")
-    finally:
-        await remote.close()
+    assert remote._closed is False
+    assert async_client.call_args.kwargs["base_url"] == "http://192.168.0.201:9000"
 
 
 @pytest.mark.parametrize(
