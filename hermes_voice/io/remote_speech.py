@@ -13,6 +13,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from hermes_voice.kit.ports import SpeakerDecision
+
 STT_SAMPLE_RATE = 16_000
 TTS_SAMPLE_RATE = 24_000
 DEFAULT_TIMEOUT_SECONDS = 180.0
@@ -223,6 +225,50 @@ class RemoteSpeechPorts:
         if not isinstance(text, str):
             raise RemoteSpeechError("Hermes Speech returned an invalid transcription")
         return text.strip()
+
+    async def verify_speaker(self, pcm: bytes) -> SpeakerDecision:
+        response = await self._async_client.post(
+            "/v1/speaker/verify",
+            content=pcm,
+            headers={
+                **_request_headers(),
+                "Content-Type": "audio/l16",
+                "X-Audio-Sample-Rate": str(STT_SAMPLE_RATE),
+            },
+        )
+        _raise_for_status(response)
+        body = _json_object(response, operation="speaker verification")
+        configured = body.get("configured")
+        accepted = body.get("accepted")
+        score = body.get("score")
+        speaker = body.get("speaker")
+        threshold = body.get("threshold")
+        reason = body.get("reason")
+        if not isinstance(configured, bool) or not isinstance(accepted, bool):
+            raise RemoteSpeechError("Hermes Speech returned an invalid speaker decision")
+        if score is not None:
+            if isinstance(score, bool) or not isinstance(score, int | float):
+                raise RemoteSpeechError("Hermes Speech returned an invalid speaker score")
+            score = float(score)
+            if not math.isfinite(score) or not -1.0 <= score <= 1.0:
+                raise RemoteSpeechError("Hermes Speech returned an invalid speaker score")
+        if speaker is not None and not isinstance(speaker, str):
+            raise RemoteSpeechError("Hermes Speech returned an invalid speaker label")
+        if isinstance(threshold, bool) or not isinstance(threshold, int | float):
+            raise RemoteSpeechError("Hermes Speech returned an invalid speaker threshold")
+        threshold = float(threshold)
+        if not math.isfinite(threshold) or not 0.0 < threshold <= 1.0:
+            raise RemoteSpeechError("Hermes Speech returned an invalid speaker threshold")
+        if not isinstance(reason, str) or not reason:
+            raise RemoteSpeechError("Hermes Speech returned an invalid speaker reason")
+        return SpeakerDecision(
+            configured=configured,
+            accepted=accepted,
+            score=score,
+            speaker=speaker,
+            threshold=threshold,
+            reason=reason,
+        )
 
     async def synthesize(self, text: str) -> bytes:
         payload: dict[str, object] = {"text": text, "speed": self._speed}

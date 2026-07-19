@@ -14,6 +14,7 @@ so the pipeline keeps working exactly as before.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import threading
@@ -23,6 +24,8 @@ from typing import Any, Final
 
 import numpy as np
 from numpy.typing import NDArray
+
+from hermes_voice.kit.ports import SpeakerDecision
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +131,37 @@ class SpeakerGate:
                         best_speaker = name
         accepted = best_score >= self._config.threshold
         return accepted, best_score, best_speaker
+
+    async def verify_speaker(self, pcm: bytes) -> SpeakerDecision:
+        """Implement the async verifier port for local, non-shared deployments."""
+        if not self.is_configured:
+            return SpeakerDecision(
+                configured=False,
+                accepted=True,
+                score=None,
+                speaker=None,
+                threshold=self._config.threshold,
+                reason="not_enrolled",
+            )
+        embedding = await asyncio.to_thread(self.embed, pcm)
+        if embedding is None:
+            return SpeakerDecision(
+                configured=True,
+                accepted=True,
+                score=None,
+                speaker=None,
+                threshold=self._config.threshold,
+                reason="verification_unavailable",
+            )
+        accepted, score, speaker = self.verify(embedding)
+        return SpeakerDecision(
+            configured=True,
+            accepted=accepted,
+            score=score,
+            speaker=speaker,
+            threshold=self._config.threshold,
+            reason="accepted" if accepted else "rejected",
+        )
 
     # --- embedding ------------------------------------------------------
     @staticmethod

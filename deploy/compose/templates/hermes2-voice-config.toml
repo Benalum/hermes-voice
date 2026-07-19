@@ -5,6 +5,10 @@ api_id = 0
 api_hash = "replace-with-my-telegram-api-hash"
 session_path = "/home/hermes/.hermes-voice/hermes.session"
 
+[speaker_gate]
+enabled = true
+threshold = 0.75
+
 [chats.hermes]
 peer = "@replace_with_hermes2_bot"
 label = "Hermes2"

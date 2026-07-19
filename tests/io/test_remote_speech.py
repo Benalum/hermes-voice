@@ -52,6 +52,19 @@ async def test_remote_ports_use_authenticated_api_contract() -> None:
         if request.url.path == "/v1/stt":
             assert request.content == pcm
             return httpx.Response(200, json={"text": "  shared speech works  "})
+        if request.url.path == "/v1/speaker/verify":
+            assert request.content == pcm
+            return httpx.Response(
+                200,
+                json={
+                    "configured": True,
+                    "accepted": True,
+                    "score": 0.91,
+                    "speaker": "alex",
+                    "threshold": 0.75,
+                    "reason": "accepted",
+                },
+            )
         if request.url.path == "/v1/tts":
             assert request.read() == b'{"text":"Hello","speed":1.0}'
             return httpx.Response(
@@ -66,13 +79,47 @@ async def test_remote_ports_use_authenticated_api_contract() -> None:
         await remote.warmup()
         await remote.warmup()
         assert remote.probability(pcm) == 0.75
+        decision = await remote.verify_speaker(pcm)
+        assert decision.configured is True
+        assert decision.accepted is True
+        assert decision.score == 0.91
+        assert decision.speaker == "alex"
         assert await remote.transcribe(pcm) == "shared speech works"
         assert await remote.synthesize("Hello") == pcm
     finally:
         await remote.close()
         await remote.close()
 
-    assert seen_paths == ["/readyz", "/v1/vad", "/v1/stt", "/v1/tts"]
+    assert seen_paths == [
+        "/readyz",
+        "/v1/vad",
+        "/v1/speaker/verify",
+        "/v1/stt",
+        "/v1/tts",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_remote_speaker_decision_is_strictly_validated() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "configured": True,
+                "accepted": "yes",
+                "score": 0.91,
+                "speaker": "alex",
+                "threshold": 0.75,
+                "reason": "accepted",
+            },
+        )
+
+    remote = build_remote(httpx.MockTransport(handler))
+    try:
+        with pytest.raises(RemoteSpeechError, match="invalid speaker decision"):
+            await remote.verify_speaker(b"\0\0")
+    finally:
+        await remote.close()
 
 
 @pytest.mark.asyncio

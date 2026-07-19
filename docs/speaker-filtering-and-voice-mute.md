@@ -1,5 +1,10 @@
 # Speaker filtering and voice mute
 
+> Shared-container deployments perform speaker embedding and verification in
+> `hermes-speech`, keyed by `HV_SPEECH_CLIENT_ID`. Enable `[speaker_gate]` in
+> Hermes Voice, then follow the shared service's `docs/SPEAKER_ENROLLMENT.md`.
+> The local installation below remains available for standalone hosts.
+
 Hermes Voice provides two related local controls:
 
 - **Speaker filtering** compares each completed utterance with enrolled voice

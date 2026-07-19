@@ -16,7 +16,13 @@ from typing import Any
 
 from hermes_voice.kit import session as sm
 from hermes_voice.kit.normalize import normalize_for_speech
-from hermes_voice.kit.ports import ResponderPort, SttPort, TtsPort, VadPort
+from hermes_voice.kit.ports import (
+    ResponderPort,
+    SpeakerVerifierPort,
+    SttPort,
+    TtsPort,
+    VadPort,
+)
 from hermes_voice.kit.protocol import (
     AgentText,
     MuteState,
@@ -28,7 +34,6 @@ from hermes_voice.kit.protocol import (
     encode_audio_frame,
     encode_server_msg,
 )
-from hermes_voice.kit.speaker_gate import SpeakerGate
 from hermes_voice.kit.turns import BargeIn, SpeechEnd, SpeechStart, TurnConfig, TurnManager
 from hermes_voice.kit.voice_mute import VoiceMuteControl
 
@@ -65,7 +70,7 @@ class Orchestrator:
         make_responder: Callable[[Callable[[sm.Event], None]], ResponderPort],
         initial_chat: str,
         config: OrchestratorConfig | None = None,
-        speaker_gate: SpeakerGate | None = None,
+        speaker_gate: SpeakerVerifierPort | None = None,
     ) -> None:
         config = config or OrchestratorConfig()
         self._send_text = send_text
@@ -250,26 +255,25 @@ class Orchestrator:
         command_only: bool = False,
         barge_in: bool = False,
     ) -> None:
-        # Speaker gate: drop utterances that are not from an enrolled voice
-        # before they reach STT. Runs in a worker thread (resemblyzer is sync).
-        if self._speaker_gate is not None and self._speaker_gate.is_configured:
+        # Drop unmatched utterances before they ever reach speech-to-text.
+        if self._speaker_gate is not None:
             try:
-                embedding = await asyncio.to_thread(self._speaker_gate.embed, pcm)
-                if embedding is not None:
-                    accepted, score, speaker = self._speaker_gate.verify(embedding)
+                decision = await self._speaker_gate.verify_speaker(pcm)
+                if decision.configured:
                     logger.warning(
                         "speaker_gate: decision accepted=%s score=%.4f "
-                        "threshold=%.4f speaker=%s duration_s=%.3f",
-                        accepted,
-                        score,
-                        self._speaker_gate._config.threshold,
-                        speaker,
+                        "threshold=%.4f speaker=%s reason=%s duration_s=%.3f",
+                        decision.accepted,
+                        decision.score if decision.score is not None else float("nan"),
+                        decision.threshold,
+                        decision.speaker,
+                        decision.reason,
                         len(pcm) / (16000 * 2),
                     )
-                    if not accepted:
-                        if not command_only and not barge_in:
-                            self.emit(sm.SttCompleted(text=""))
-                        return
+                if not decision.accepted:
+                    if not command_only and not barge_in:
+                        self.emit(sm.SttCompleted(text=""))
+                    return
             except Exception:
                 logger.exception("speaker_gate: verification error (failing open)")
         try:

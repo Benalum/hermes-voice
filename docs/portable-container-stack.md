@@ -16,6 +16,12 @@ The two agents never share Hermes state, Telegram bot tokens, Telethon user
 sessions, browser tokens, or speech client tokens. The shared speech service is
 private infrastructure and is not exposed through Tailscale Serve or Funnel.
 
+Speaker verification is also shared by `hermes-speech`. Enable
+`[speaker_gate]` in each voice config, then enroll a separate profile for each
+authenticated client ID on the speech server. In remote mode, the threshold and
+profile store are controlled by Hermes Speech; Hermes Voice never loads a
+second speaker model.
+
 ## Requirements
 
 - Docker Engine with Compose v2, or Docker Desktop.

@@ -25,7 +25,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from hermes_voice.kit import session as sm
-from hermes_voice.kit.ports import ResponderPort, SttPort, TtsPort, VadPort
+from hermes_voice.kit.ports import (
+    ResponderPort,
+    SpeakerVerifierPort,
+    SttPort,
+    TtsPort,
+    VadPort,
+)
 from hermes_voice.kit.protocol import (
     Cancel,
     Chats,
@@ -188,7 +194,7 @@ async def _run_voice_session(
     make_responder: MakeResponder,
     initial_chat: str,
     orchestrator_config: OrchestratorConfig,
-    speaker_gate: SpeakerGate | None = None,
+    speaker_gate: SpeakerVerifierPort | None = None,
 ) -> None:
     orchestrator = Orchestrator(
         send_text=ws.send_text,
@@ -369,13 +375,7 @@ def create_app(
     speech_ports: dict[str, Any] = {"vad": vad, "stt": stt, "tts": tts}
     voice_session_gate = _VoiceSessionGate()
     health = {"models": "n/a", "telegram": "n/a"}
-    speaker_gate: SpeakerGate | None = None
-    if resolved_config is not None and resolved_config.speaker_gate.enabled:
-        try:
-            speaker_gate = SpeakerGate(resolved_config.speaker_gate)
-            logger.info("speaker_gate enabled (threshold=%.3f)", speaker_gate._config.threshold)
-        except Exception:
-            logger.exception("failed to build speaker gate; continuing without it")
+    speaker_gate: dict[str, SpeakerVerifierPort | None] = {"port": None}
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -398,6 +398,18 @@ def create_app(
                     speech_ports["vad"], speech_ports["stt"], speech_ports["tts"] = (
                         _build_speech_ports()
                     )
+                if resolved_config is not None and resolved_config.speaker_gate.enabled:
+                    remote_verifier = speech_ports["stt"]
+                    if callable(getattr(remote_verifier, "verify_speaker", None)):
+                        speaker_gate["port"] = remote_verifier
+                        logger.info("speaker_gate enabled through shared speech service")
+                    else:
+                        local_gate = SpeakerGate(resolved_config.speaker_gate)
+                        speaker_gate["port"] = local_gate
+                        logger.info(
+                            "speaker_gate enabled locally (threshold=%.3f)",
+                            resolved_config.speaker_gate.threshold,
+                        )
                 for port in (speech_ports["stt"], speech_ports["tts"]):
                     warmup = getattr(port, "warmup", None)
                     if callable(warmup):
@@ -494,7 +506,7 @@ def create_app(
                 make_responder=make_responder,
                 initial_chat=initial_chat,
                 orchestrator_config=orch_config,
-                speaker_gate=speaker_gate,
+                speaker_gate=speaker_gate["port"],
             )
         except WebSocketDisconnect:
             return
