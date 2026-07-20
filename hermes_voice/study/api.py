@@ -152,6 +152,7 @@ def create_study_router(store: StudyStore) -> APIRouter:
             path,
             media_type=str(media["mime_type"]),
             filename=str(media["original_filename"]),
+            content_disposition_type="inline",
             headers={
                 "Cache-Control": "private, max-age=31536000, immutable",
                 "ETag": f'"{media["sha256"]}"',
