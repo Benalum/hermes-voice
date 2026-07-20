@@ -66,9 +66,11 @@ if [[ -d /var/lib/hermes-voice/study ]]; then
   tar -C /var/lib/hermes-voice -czf "$BACKUP/study-before.tgz" study
 fi
 
-git fetch --prune origin \
-  "$BRANCH:refs/remotes/origin/$BRANCH"
-git switch -C deploy/study "origin/$BRANCH"
+# Fetch the requested branch only into FETCH_HEAD. Do not update or prune a
+# remote-tracking ref here: a stale or damaged refs/remotes/origin/... entry
+# must not prevent an otherwise valid deployment.
+git fetch --no-tags origin "refs/heads/$BRANCH"
+git switch -C deploy/study FETCH_HEAD
 NEW_HEAD="$(git rev-parse HEAD)"
 printf '%s\n' "$NEW_HEAD" > "$BACKUP/deployed-head.txt"
 
