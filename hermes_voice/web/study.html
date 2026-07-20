@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hermes Study</title>
-  <link rel="stylesheet" href="/static/study.css?v=20260720-1">
+  <link rel="stylesheet" href="/static/study.css?v=20260720-2">
 </head>
 <body>
   <header class="topbar">
@@ -13,7 +13,10 @@
       <a href="/">Voice</a>
       <a class="active" href="/study" aria-current="page">Study</a>
     </nav>
-    <button id="new-deck" type="button">+ New deck</button>
+    <div class="actions" style="margin-left:auto">
+      <button id="install-mcat" type="button">Install MCAT starter decks</button>
+      <button id="new-deck" type="button">+ New deck</button>
+    </div>
   </header>
   <main class="layout">
     <aside class="sidebar"><div class="sidebar-heading"><div><p class="eyebrow">Library</p><h1>Study decks</h1></div></div><div id="deck-list" class="deck-list"></div></aside>
@@ -36,6 +39,27 @@
   </main>
   <dialog id="deck-dialog"><form id="deck-form" method="dialog"><input id="deck-id" type="hidden"><h2 id="deck-dialog-title">New deck</h2><label>Deck name<input id="deck-name" maxlength="120" required></label><label>Description<textarea id="deck-description-input" maxlength="4000" rows="4"></textarea></label><p id="deck-error" class="form-error"></p><div class="dialog-actions"><button value="cancel" type="button" data-close-dialog>Cancel</button><button class="primary" type="submit">Save deck</button></div></form></dialog>
   <dialog id="card-dialog"><form id="card-form" method="dialog"><input id="card-id" type="hidden"><h2 id="card-dialog-title">New card</h2><label>Question<textarea id="card-question" maxlength="20000" rows="5" required></textarea></label><label class="media-input">Question images<input id="question-images" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><div id="question-media-existing" class="media-editor"></div><label>Answer<textarea id="card-answer" maxlength="20000" rows="5" required></textarea></label><label class="media-input">Answer images<input id="answer-images" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><div id="answer-media-existing" class="media-editor"></div><label>Notes<textarea id="card-notes" maxlength="40000" rows="4"></textarea></label><label class="media-input">Notes images<input id="notes-images" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><div id="notes-media-existing" class="media-editor"></div><p id="card-error" class="form-error"></p><div class="dialog-actions"><button value="cancel" type="button" data-close-dialog>Cancel</button><button class="primary" type="submit">Save card</button></div></form></dialog>
-  <script type="module" src="/static/study.mjs?v=20260720-1"></script>
+  <script type="module" src="/static/study.mjs?v=20260720-2"></script>
+  <script type="module">
+    const button = document.getElementById("install-mcat");
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      const original = button.textContent;
+      button.textContent = "Installing…";
+      try {
+        const response = await fetch("/api/study/starter-packs/mcat-foundations", { method: "POST" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || `Request failed (${response.status})`);
+        const result = payload.result;
+        const media = payload.media;
+        alert(`MCAT starter pack ready. ${result.decks_created} decks and ${result.cards_created} cards created; ${media.attached} diagrams attached.`);
+        location.reload();
+      } catch (error) {
+        alert(`Could not install MCAT starter decks: ${error.message}`);
+        button.disabled = false;
+        button.textContent = original;
+      }
+    });
+  </script>
 </body>
 </html>
