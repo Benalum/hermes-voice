@@ -36,6 +36,7 @@ def wrap_responder_factory(
             store=store,
             delegate=make_responder(emit),
             emit=emit,
+            watch_sessions=True,
         )
 
     return make
