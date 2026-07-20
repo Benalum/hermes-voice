@@ -74,7 +74,12 @@ def _wrap_telegram_relay(store: StudyStore) -> None:
             if not callable(emit):
                 raise TypeError("TelegramRelay requires an emit callback")
             delegate = original(*args, **kwargs)
-            self._study = StudyResponder(store=store, delegate=delegate, emit=emit)
+            self._study = StudyResponder(
+                store=store,
+                delegate=delegate,
+                emit=emit,
+                watch_sessions=True,
+            )
 
         async def send(self, text: str) -> None:
             await self._study.send(text)
