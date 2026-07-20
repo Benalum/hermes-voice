@@ -1,0 +1,43 @@
+name: Portable container
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate Compose rendering
+        run: |
+          cp deploy/compose/.env.example .env
+          docker compose config >/dev/null
+
+      - name: Build remote-speech image
+        run: docker build --tag hermes-voice:ci .
+
+      - name: Start model-free image smoke test
+        run: |
+          docker run --detach --name hermes-voice-ci \
+            --publish 127.0.0.1:8990:8990 \
+            --env HV_MODE=echo \
+            hermes-voice:ci
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8990/healthz | grep -q '"mode":"echo"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs hermes-voice-ci
+          exit 1
+
+      - name: Show container logs
+        if: always()
+        run: docker logs hermes-voice-ci 2>&1 || true

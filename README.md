@@ -60,6 +60,26 @@ Do not combine commands from different platform guides.
 | macOS Intel | Faster-Whisper STT + portable Kokoro TTS |
 | Windows x64 | Faster-Whisper STT + portable Kokoro TTS |
 
+Set `HV_SPEECH_BACKEND=remote` to keep all speech models in a shared
+`hermes-speech` service. In remote
+mode this gateway keeps only lightweight authenticated HTTP clients; it does
+not load Faster-Whisper, Kokoro, Silero, Torch, or MLX.
+
+## Portable container stack
+
+The repository includes a hardened Hermes Voice image and a Compose stack for
+two completely separate Hermes agents. Each agent has its own official Hermes
+Agent container, Hermes Voice browser gateway, persistent state, Telegram
+identity, shared-speech credential, and optional Tailscale identity.
+
+```text
+phone → private Tailscale HTTPS → Hermes Voice → Telegram → Hermes Agent
+                                  └────────────→ shared Hermes Speech
+```
+
+Use [the portable container deployment guide](docs/portable-container-stack.md)
+for Docker Engine, Docker Desktop, Linux, macOS, Windows/WSL2, and NAS hosts.
+
 ## Fast development check
 
 Install Python 3.12 and dependencies using `uv`, then run the model-free suite:

@@ -47,6 +47,15 @@ def test_portable_override_is_allowed_on_linux() -> None:
         assert detect_speech_backend() == "portable"
 
 
+def test_remote_override_is_platform_independent() -> None:
+    with patch.dict(
+        "os.environ",
+        {"HV_SPEECH_BACKEND": "remote"},
+        clear=True,
+    ):
+        assert detect_speech_backend() == "remote"
+
+
 def test_mlx_override_is_rejected_on_linux() -> None:
     with (
         patch("hermes_voice.io.speech_factory.sys.platform", "linux"),

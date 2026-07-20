@@ -3,7 +3,24 @@ tests supply fakes. Kit code never imports I/O libraries."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
+
+
+@dataclass(frozen=True)
+class SpeakerDecision:
+    configured: bool
+    accepted: bool
+    score: float | None
+    speaker: str | None
+    threshold: float
+    reason: str
+
+
+class SpeakerVerifierPort(Protocol):
+    async def verify_speaker(self, pcm: bytes) -> SpeakerDecision:
+        """Decide whether a completed 16 kHz utterance matches an enrollment."""
+        ...
 
 
 class VadPort(Protocol):

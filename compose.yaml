@@ -1,0 +1,158 @@
+name: hermes-portable
+
+x-agent-common: &agent-common
+  image: ${HERMES_AGENT_IMAGE:-nousresearch/hermes-agent:latest}
+  command: gateway run
+  restart: unless-stopped
+  networks: [hermes]
+  deploy:
+    resources:
+      limits:
+        cpus: "2.0"
+        memory: 4G
+
+x-voice-common: &voice-common
+  build:
+    context: .
+  image: ${HERMES_VOICE_IMAGE:-hermes-voice:portable}
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=128m,mode=1777
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  networks: [hermes]
+  environment:
+    HV_MODE: telegram
+    HV_SPEECH_BACKEND: remote
+    HV_SPEECH_SERVICE_URL: ${HERMES_SPEECH_URL:-http://hermes-speech:9000}
+    HV_SPEECH_REQUEST_TIMEOUT_SECONDS: ${HERMES_SPEECH_TIMEOUT_SECONDS:-180}
+  deploy:
+    resources:
+      limits:
+        cpus: "0.75"
+        memory: 768M
+
+x-tailscale-common: &tailscale-common
+  image: tailscale/tailscale:stable
+  restart: unless-stopped
+  profiles: [tailscale]
+  networks: [hermes]
+  environment:
+    TS_STATE_DIR: /var/lib/tailscale
+    TS_USERSPACE: "true"
+    TS_AUTH_ONCE: "true"
+    TS_ACCEPT_DNS: "false"
+
+services:
+  hermes1-agent:
+    <<: *agent-common
+    container_name: hermes1-agent
+    volumes:
+      - ./deploy/compose/state/hermes1-agent:/opt/data
+      - ./deploy/hermes-agent/hermes-speech-bridge.py:/usr/local/bin/hermes-speech-bridge:ro
+    environment:
+      HV_SPEECH_SERVICE_URL: ${HERMES_SPEECH_URL:-http://hermes-speech:9000}
+      HV_SPEECH_CLIENT_ID: ${HERMES1_SPEECH_CLIENT_ID:-hermes1}
+      HV_SPEECH_SERVICE_TOKEN: ${HERMES1_SPEECH_TOKEN:-replace-with-64-hex-token}
+      HV_SPEECH_REQUEST_TIMEOUT_SECONDS: ${HERMES_SPEECH_TIMEOUT_SECONDS:-180}
+
+  hermes1-voice:
+    <<: *voice-common
+    container_name: hermes1-voice
+    depends_on:
+      hermes1-agent:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${HERMES1_VOICE_PORT:-8991}:8990"
+    volumes:
+      - ./deploy/compose/state/hermes1-voice:/home/hermes/.hermes-voice
+    environment:
+      HV_MODE: telegram
+      HV_SPEECH_BACKEND: remote
+      HV_SPEECH_SERVICE_URL: ${HERMES_SPEECH_URL:-http://hermes-speech:9000}
+      HV_SPEECH_CLIENT_ID: ${HERMES1_SPEECH_CLIENT_ID:-hermes1}
+      HV_SPEECH_SERVICE_TOKEN: ${HERMES1_SPEECH_TOKEN:-replace-with-64-hex-token}
+      HV_SPEECH_REQUEST_TIMEOUT_SECONDS: ${HERMES_SPEECH_TIMEOUT_SECONDS:-180}
+      HV_KOKORO_VOICE: ${HERMES1_TTS_VOICE:-af_heart}
+      HV_KOKORO_SPEED: ${HERMES1_TTS_SPEED:-1.0}
+
+  tailscale-hermes1:
+    <<: *tailscale-common
+    container_name: tailscale-hermes1
+    depends_on:
+      hermes1-voice:
+        condition: service_healthy
+    hostname: ${HERMES1_TS_HOSTNAME:-hermes1-voice}
+    environment:
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_AUTH_ONCE: "true"
+      TS_ACCEPT_DNS: "false"
+      TS_AUTHKEY: ${HERMES1_TS_AUTHKEY:-}
+      TS_HOSTNAME: ${HERMES1_TS_HOSTNAME:-hermes1-voice}
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - tailscale-hermes1-state:/var/lib/tailscale
+      - ./deploy/tailscale/hermes1-serve.json:/config/serve.json:ro
+
+  hermes2-agent:
+    <<: *agent-common
+    container_name: hermes2-agent
+    volumes:
+      - ./deploy/compose/state/hermes2-agent:/opt/data
+      - ./deploy/hermes-agent/hermes-speech-bridge.py:/usr/local/bin/hermes-speech-bridge:ro
+    environment:
+      HV_SPEECH_SERVICE_URL: ${HERMES_SPEECH_URL:-http://hermes-speech:9000}
+      HV_SPEECH_CLIENT_ID: ${HERMES2_SPEECH_CLIENT_ID:-hermes2}
+      HV_SPEECH_SERVICE_TOKEN: ${HERMES2_SPEECH_TOKEN:-replace-with-64-hex-token}
+      HV_SPEECH_REQUEST_TIMEOUT_SECONDS: ${HERMES_SPEECH_TIMEOUT_SECONDS:-180}
+
+  hermes2-voice:
+    <<: *voice-common
+    container_name: hermes2-voice
+    depends_on:
+      hermes2-agent:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${HERMES2_VOICE_PORT:-8992}:8990"
+    volumes:
+      - ./deploy/compose/state/hermes2-voice:/home/hermes/.hermes-voice
+    environment:
+      HV_MODE: telegram
+      HV_SPEECH_BACKEND: remote
+      HV_SPEECH_SERVICE_URL: ${HERMES_SPEECH_URL:-http://hermes-speech:9000}
+      HV_SPEECH_CLIENT_ID: ${HERMES2_SPEECH_CLIENT_ID:-hermes2}
+      HV_SPEECH_SERVICE_TOKEN: ${HERMES2_SPEECH_TOKEN:-replace-with-64-hex-token}
+      HV_SPEECH_REQUEST_TIMEOUT_SECONDS: ${HERMES_SPEECH_TIMEOUT_SECONDS:-180}
+      HV_KOKORO_VOICE: ${HERMES2_TTS_VOICE:-af_heart}
+      HV_KOKORO_SPEED: ${HERMES2_TTS_SPEED:-1.0}
+
+  tailscale-hermes2:
+    <<: *tailscale-common
+    container_name: tailscale-hermes2
+    depends_on:
+      hermes2-voice:
+        condition: service_healthy
+    hostname: ${HERMES2_TS_HOSTNAME:-hermes2-voice}
+    environment:
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_AUTH_ONCE: "true"
+      TS_ACCEPT_DNS: "false"
+      TS_AUTHKEY: ${HERMES2_TS_AUTHKEY:-}
+      TS_HOSTNAME: ${HERMES2_TS_HOSTNAME:-hermes2-voice}
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - tailscale-hermes2-state:/var/lib/tailscale
+      - ./deploy/tailscale/hermes2-serve.json:/config/serve.json:ro
+
+networks:
+  hermes:
+    driver: bridge
+
+volumes:
+  tailscale-hermes1-state:
+  tailscale-hermes2-state:

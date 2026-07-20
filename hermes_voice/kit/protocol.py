@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import json
+import math
 import struct
 from dataclasses import dataclass
 from typing import cast
 
 _EPOCH_PREFIX = struct.Struct("<I")
+
+MIN_SPEECH_SPEED = 0.5
+MAX_SPEECH_SPEED = 2.0
+MIN_END_SILENCE_MS = 300
+MAX_END_SILENCE_MS = 5000
 
 
 class ProtocolError(Exception):
@@ -27,6 +33,12 @@ class SelectChat:
 @dataclass(frozen=True)
 class Mute:
     on: bool
+
+
+@dataclass(frozen=True)
+class VoiceSettings:
+    speech_speed: float
+    end_silence_ms: int
 
 
 @dataclass(frozen=True)
@@ -52,7 +64,9 @@ class Cancel:
     pass
 
 
-ClientMsg = Hello | SelectChat | ListChats | ListTopics | SelectTopic | Mute | Cancel
+ClientMsg = (
+    Hello | SelectChat | ListChats | ListTopics | SelectTopic | Mute | VoiceSettings | Cancel
+)
 
 
 @dataclass(frozen=True)
@@ -65,6 +79,12 @@ class Ready:
 class MuteState:
     on: bool
     source: str
+
+
+@dataclass(frozen=True)
+class VoiceSettingsState:
+    speech_speed: float
+    end_silence_ms: int
 
 
 @dataclass(frozen=True)
@@ -126,6 +146,7 @@ class ErrorMsg:
 ServerMsg = (
     Ready
     | MuteState
+    | VoiceSettingsState
     | Chats
     | Topics
     | TopicSelected
@@ -144,6 +165,22 @@ def _require(obj: dict[str, object], field: str, kind: type) -> object:
     if not isinstance(value, kind) or (kind is not bool and isinstance(value, bool)):
         raise ProtocolError(f"field {field!r} must be {kind.__name__}")
     return value
+
+
+def _require_number(
+    obj: dict[str, object],
+    field: str,
+    *,
+    minimum: float,
+    maximum: float,
+) -> float:
+    value = obj.get(field)
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ProtocolError(f"field {field!r} must be number")
+    resolved = float(value)
+    if not math.isfinite(resolved) or not minimum <= resolved <= maximum:
+        raise ProtocolError(f"field {field!r} must be between {minimum} and {maximum}")
+    return resolved
 
 
 def _optional_int(
@@ -219,6 +256,22 @@ def decode_client_text(raw: str) -> ClientMsg:
             )
         case "mute":
             return Mute(on=bool(_require(obj, "on", bool)))
+        case "voice_settings":
+            end_silence_ms = cast(int, _require(obj, "end_silence_ms", int))
+            if not MIN_END_SILENCE_MS <= end_silence_ms <= MAX_END_SILENCE_MS:
+                raise ProtocolError(
+                    "field 'end_silence_ms' must be between "
+                    f"{MIN_END_SILENCE_MS} and {MAX_END_SILENCE_MS}"
+                )
+            return VoiceSettings(
+                speech_speed=_require_number(
+                    obj,
+                    "speech_speed",
+                    minimum=MIN_SPEECH_SPEED,
+                    maximum=MAX_SPEECH_SPEED,
+                ),
+                end_silence_ms=end_silence_ms,
+            )
         case "cancel":
             return Cancel()
         case other:
@@ -234,6 +287,15 @@ def encode_server_msg(msg: ServerMsg) -> str:
             body = {"type": "chats", "chats": list(items)}
         case MuteState(on=on, source=source):
             body = {"type": "mute_state", "on": on, "source": source}
+        case VoiceSettingsState(
+            speech_speed=speech_speed,
+            end_silence_ms=end_silence_ms,
+        ):
+            body = {
+                "type": "voice_settings_state",
+                "speech_speed": speech_speed,
+                "end_silence_ms": end_silence_ms,
+            }
         case Topics(items=items):
             body = {"type": "topics", "topics": list(items)}
         case TopicSelected(topic_id=topic_id):

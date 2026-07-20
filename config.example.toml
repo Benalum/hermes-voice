@@ -11,11 +11,12 @@ api_id = 0
 api_hash = ""
 session_path = "~/.hermes-voice/hermes.session"
 
-# Optional local speaker verification. Install the speaker-filter extra and
-# enroll at least one sample before enabling this gate. See:
+# Speaker verification. With HV_SPEECH_BACKEND=remote this is performed once
+# by the shared Hermes Speech service. Local backends require the optional
+# speaker-filter extra and the local enrollment script. See:
 # docs/speaker-filtering-and-voice-mute.md
 [speaker_gate]
-enabled = false
+enabled = true
 threshold = 0.75
 store = "~/.hermes-voice/speakers.json"
 

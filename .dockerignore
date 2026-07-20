@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+.mypy_cache
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+*.session
+*.session-journal
+deploy/compose/state
+docs
+launchd
+reports
+scripts
+tests
