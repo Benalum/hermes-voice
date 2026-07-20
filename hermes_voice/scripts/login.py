@@ -29,7 +29,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 async def _authorize_with_qr(client: Any) -> None:
-    import qrcode
+    import qrcode  # type: ignore[import-untyped]
     from telethon.errors import SessionPasswordNeededError
 
     await client.connect()
