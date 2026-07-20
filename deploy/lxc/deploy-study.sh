@@ -99,7 +99,13 @@ done
 
 curl -fsS http://127.0.0.1:8990/healthz
 printf '\n'
-curl -fsS http://127.0.0.1:8990/study | grep -q 'Hermes Study'
+
+# Do not pipe curl directly into grep while pipefail is enabled. grep -q can
+# close the pipe after finding an early match, which makes curl exit with a
+# broken-pipe status and falsely triggers rollback.
+curl -fsS http://127.0.0.1:8990/study \
+  --output /tmp/hermes-study-page.html
+grep -q 'Hermes Study' /tmp/hermes-study-page.html
 
 curl -fsS -X POST \
   http://127.0.0.1:8990/api/study/starter-packs/mcat-foundations \
