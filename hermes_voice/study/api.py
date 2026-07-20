@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Literal, TypeVar
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse
@@ -13,7 +13,6 @@ from hermes_voice.study.store import StudyConflictError, StudyNotFoundError, Stu
 
 Section = Literal["question", "answer", "notes"]
 Outcome = Literal["correct", "wrong", "skipped"]
-T = TypeVar("T")
 
 
 class DeckCreate(BaseModel):
@@ -193,7 +192,7 @@ def create_study_router(store: StudyStore) -> APIRouter:
     return router
 
 
-def _translate(callback: Callable[[], T]) -> T:
+def _translate[T](callback: Callable[[], T]) -> T:
     try:
         return callback()
     except StudyNotFoundError as exc:

@@ -49,7 +49,8 @@ _STUDY_STYLE = """
     letter-spacing:.1em; text-transform:uppercase; }
   .study-live-heading h2 { margin:.2rem 0 .8rem; font-size:1.1rem; }
   #study-live-progress { color:#a9a9b5; font-size:.85rem; }
-  #study-live-question,#study-live-answer,#study-live-notes { white-space:pre-wrap; margin:.6rem 0; }
+  #study-live-question,#study-live-answer,#study-live-notes {
+    white-space:pre-wrap; margin:.6rem 0; }
   #study-live-answer { padding-top:.7rem; border-top:1px solid #33333e; }
   #study-live-notes { color:#a9a9b5; }
   .study-live-media { display:grid; gap:.65rem; margin:.65rem 0; }
@@ -87,7 +88,7 @@ def _wrap_telegram_relay(store: StudyStore) -> None:
         def __getattr__(self, name: str) -> Any:
             return getattr(self._study, name)
 
-    telegram_telethon.TelegramRelay = StudyTelegramRelay  # type: ignore[assignment]
+    telegram_telethon.TelegramRelay = StudyTelegramRelay  # type: ignore[misc]
 
 
 def _install_voice_index(app: FastAPI) -> None:

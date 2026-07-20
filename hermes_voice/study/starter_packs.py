@@ -1,5 +1,8 @@
 """Curated starter decks for Hermes Study."""
 
+# Pedagogical prose is kept readable as complete source strings.
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 from typing import TypedDict

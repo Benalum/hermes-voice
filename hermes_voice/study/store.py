@@ -1,5 +1,8 @@
 """SQLite storage for Hermes Study decks, cards, media, and sessions."""
 
+# SQL statements are intentionally kept as searchable complete strings.
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import base64
@@ -163,7 +166,9 @@ class StudyStore:
                     "INSERT INTO decks(name,description,created_at,updated_at) VALUES(?,?,?,?)",
                     (_deck_name(name), description.strip(), now, now),
                 )
-                deck_id = int(cursor.lastrowid)
+                if cursor.lastrowid is None:
+                    raise RuntimeError("SQLite did not return a deck identifier")
+                deck_id = cursor.lastrowid
         except sqlite3.IntegrityError as exc:
             raise StudyConflictError("a deck with that name already exists") from exc
         return self.get_deck(deck_id)
@@ -240,7 +245,9 @@ class StudyStore:
                 "INSERT INTO cards(deck_id,question,answer,notes,position,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
                 (deck_id, question, answer, notes.strip(), position, now, now),
             )
-            card_id = int(cursor.lastrowid)
+            if cursor.lastrowid is None:
+                raise RuntimeError("SQLite did not return a card identifier")
+            card_id = cursor.lastrowid
         return self.get_card(card_id)
 
     def update_card(
