@@ -8,25 +8,8 @@ _SENTENCE_END = re.compile(r"[.!?…]+(?=\s|$)")
 
 _ABBREVIATIONS = frozenset(
     {
-        "dr",
-        "mr",
-        "mrs",
-        "ms",
-        "prof",
-        "sr",
-        "jr",
-        "st",
-        "vs",
-        "etc",
-        "e.g",
-        "i.e",
-        "eg",
-        "ie",
-        "no",
-        "inc",
-        "ltd",
-        "dept",
-        "approx",
+        "dr", "mr", "mrs", "ms", "prof", "sr", "jr", "st", "vs", "etc",
+        "e.g", "i.e", "eg", "ie", "no", "inc", "ltd", "dept", "approx",
     }
 )
 
@@ -54,4 +37,6 @@ def _split_line(line: str) -> list[str]:
 
 
 def split_sentences(text: str) -> tuple[str, ...]:
-    return tuple(sentence for line in text.splitlines() for sentence in _split_line(line))
+    return tuple(
+        sentence for line in text.splitlines() for sentence in _split_line(line)
+    )

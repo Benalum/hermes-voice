@@ -95,7 +95,8 @@ class ReplyAggregator:
         ready = [
             (message_id, pending.text)
             for message_id, pending in sorted(self._pending.items())
-            if now - pending.last_edit >= self.config.edit_settle_s or message_id < newest_id
+            if now - pending.last_edit >= self.config.edit_settle_s
+            or message_id < newest_id
         ]
         for message_id, _ in ready:
             del self._pending[message_id]

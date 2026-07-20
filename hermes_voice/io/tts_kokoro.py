@@ -76,7 +76,11 @@ class KokoroTts:
         if not chunks:
             return b""
         audio = np.concatenate(chunks)
-        return bytes((np.clip(audio, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes())
+        return bytes(
+            (np.clip(audio, -1.0, 1.0) * 32767.0)
+            .astype(np.int16)
+            .tobytes()
+        )
 
 
 def _patch_sine_gen_length_bug() -> None:
