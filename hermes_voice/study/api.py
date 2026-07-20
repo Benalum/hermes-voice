@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse
@@ -148,12 +149,12 @@ def create_study_router(store: StudyStore) -> APIRouter:
         path = media["path"]
         if not path.exists():
             raise HTTPException(status_code=404, detail="media file is missing")
+        filename = quote(str(media["original_filename"]), safe="")
         return FileResponse(
             path,
             media_type=str(media["mime_type"]),
-            filename=str(media["original_filename"]),
-            content_disposition_type="inline",
             headers={
+                "Content-Disposition": f"inline; filename*=UTF-8''{filename}",
                 "Cache-Control": "private, max-age=31536000, immutable",
                 "ETag": f'"{media["sha256"]}"',
             },
