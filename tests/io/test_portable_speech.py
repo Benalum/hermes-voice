@@ -48,12 +48,34 @@ async def test_tts_blank_text_returns_blank_without_loading_pipeline() -> None:
     tts._load.assert_not_called()
 
 
-def test_tts_rejects_invalid_speed() -> None:
+@pytest.mark.parametrize("speed", [0.0, 0.49, 2.01])
+def test_tts_rejects_invalid_speed(speed: float) -> None:
     with pytest.raises(
         ValueError,
-        match="must be greater than zero",
+        match=r"must be between 0\.5 and 2\.0",
     ):
-        PortableKokoroTts(speed=0)
+        PortableKokoroTts(speed=speed)
+
+
+def test_tts_speed_change_applies_to_future_synthesis() -> None:
+    tts = PortableKokoroTts(speed=1.0)
+    seen_speeds: list[float] = []
+
+    def fake_pipeline(
+        _text: str,
+        *,
+        voice: str,
+        speed: float,
+    ):
+        del voice
+        seen_speeds.append(speed)
+        yield "", "", np.array([0.0], dtype=np.float32)
+
+    tts._pipeline = fake_pipeline
+    tts.set_speed(1.25)
+
+    assert tts._synthesize_sync("hello")
+    assert seen_speeds == [1.25]
 
 
 def test_tts_clips_audio_before_int16_conversion() -> None:

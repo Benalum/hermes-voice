@@ -21,6 +21,8 @@ from hermes_voice.kit.protocol import (
     Topics,
     TopicSelected,
     Transcript,
+    VoiceSettings,
+    VoiceSettingsState,
     decode_audio_frame,
     decode_client_text,
     encode_audio_frame,
@@ -75,6 +77,25 @@ class TestClientMessages:
         assert decode_client_text('{"type": "mute", "on": true}') == Mute(on=True)
         assert decode_client_text('{"type": "mute", "on": false}') == Mute(on=False)
 
+    def test_decodes_voice_settings(self) -> None:
+        assert decode_client_text(
+            '{"type": "voice_settings", "speech_speed": 1.25, "end_silence_ms": 1500}'
+        ) == VoiceSettings(speech_speed=1.25, end_silence_ms=1500)
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            '{"type": "voice_settings", "speech_speed": 0.49, "end_silence_ms": 750}',
+            '{"type": "voice_settings", "speech_speed": 2.01, "end_silence_ms": 750}',
+            '{"type": "voice_settings", "speech_speed": true, "end_silence_ms": 750}',
+            '{"type": "voice_settings", "speech_speed": 1.0, "end_silence_ms": 299}',
+            '{"type": "voice_settings", "speech_speed": 1.0, "end_silence_ms": 5001}',
+        ],
+    )
+    def test_rejects_invalid_voice_settings(self, payload: str) -> None:
+        with pytest.raises(ProtocolError):
+            decode_client_text(payload)
+
     def test_decodes_cancel(self) -> None:
         assert decode_client_text('{"type": "cancel"}') == Cancel()
 
@@ -116,6 +137,11 @@ class TestServerMessages:
         )
         assert encode_server_msg(MuteState(on=False, source="button")) == (
             '{"type": "mute_state", "on": false, "source": "button"}'
+        )
+
+    def test_encodes_voice_settings_state(self) -> None:
+        assert encode_server_msg(VoiceSettingsState(speech_speed=1.25, end_silence_ms=1504)) == (
+            '{"type": "voice_settings_state", "speech_speed": 1.25, "end_silence_ms": 1504}'
         )
 
     def test_encodes_discovered_chats(self) -> None:

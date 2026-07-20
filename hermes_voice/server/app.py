@@ -47,6 +47,7 @@ from hermes_voice.kit.protocol import (
     TopicHistory,
     Topics,
     TopicSelected,
+    VoiceSettings,
     decode_client_text,
     encode_audio_frame,
     encode_server_msg,
@@ -292,6 +293,14 @@ async def _run_voice_session(
                         orchestrator.emit(sm.CancelPressed())
                     case Mute(on=on):
                         await orchestrator.set_muted(on, source="button")
+                    case VoiceSettings(
+                        speech_speed=speech_speed,
+                        end_silence_ms=end_silence_ms,
+                    ):
+                        await orchestrator.set_voice_settings(
+                            speech_speed=speech_speed,
+                            end_silence_ms=end_silence_ms,
+                        )
                     case Hello():
                         pass
             except Exception as exc:

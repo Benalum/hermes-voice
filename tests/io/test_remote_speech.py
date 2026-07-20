@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import wave
 from unittest.mock import patch
 
@@ -97,6 +98,29 @@ async def test_remote_ports_use_authenticated_api_contract() -> None:
         "/v1/stt",
         "/v1/tts",
     ]
+
+
+@pytest.mark.asyncio
+async def test_remote_tts_speed_can_change() -> None:
+    seen_speeds: list[float] = []
+    pcm = b"\x01\x00"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.read())
+        seen_speeds.append(float(payload["speed"]))
+        return httpx.Response(200, content=wav_bytes(pcm))
+
+    remote = build_remote(httpx.MockTransport(handler))
+    try:
+        assert await remote.synthesize("default") == pcm
+        remote.set_speed(1.35)
+        assert await remote.synthesize("faster") == pcm
+        with pytest.raises(ValueError, match=r"between 0\.5 and 2\.0"):
+            remote.set_speed(2.5)
+    finally:
+        await remote.close()
+
+    assert seen_speeds == [1.0, 1.35]
 
 
 @pytest.mark.asyncio

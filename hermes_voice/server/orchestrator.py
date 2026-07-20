@@ -9,9 +9,10 @@ import asyncio
 import contextlib
 import inspect
 import logging
+import math
 from collections import deque
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from hermes_voice.kit import session as sm
@@ -31,6 +32,7 @@ from hermes_voice.kit.protocol import (
     SpeakStop,
     StateMsg,
     Transcript,
+    VoiceSettingsState,
     encode_audio_frame,
     encode_server_msg,
 )
@@ -44,6 +46,7 @@ TTS_SAMPLE_WIDTH_BYTES = 2
 TTS_FRAME_MS = 50
 TTS_FRAME_BYTES = TTS_SAMPLE_RATE * TTS_SAMPLE_WIDTH_BYTES * TTS_FRAME_MS // 1000
 TTS_PLAYBACK_GRACE_S = 0.15
+VAD_FRAME_MS = 32
 
 
 @dataclass(frozen=True)
@@ -119,6 +122,51 @@ class Orchestrator:
             muted = self._voice_mute.muted
         await self._send(MuteState(on=muted, source=source))
         logger.warning("voice control: %s by %s", "muted" if muted else "unmuted", source)
+
+    async def set_voice_settings(
+        self,
+        *,
+        speech_speed: float,
+        end_silence_ms: int,
+    ) -> None:
+        """Apply browser voice preferences and acknowledge effective values."""
+        await self._wait_until_ready()
+        self._raise_if_stopped()
+        if (
+            isinstance(speech_speed, bool)
+            or not math.isfinite(float(speech_speed))
+            or not 0.5 <= float(speech_speed) <= 2.0
+        ):
+            raise ValueError("speech_speed must be between 0.5 and 2.0")
+        if (
+            isinstance(end_silence_ms, bool)
+            or not isinstance(end_silence_ms, int)
+            or not 300 <= end_silence_ms <= 5000
+        ):
+            raise ValueError("end_silence_ms must be between 300 and 5000")
+        setter = getattr(self._tts, "set_speed", None)
+        if not callable(setter):
+            raise RuntimeError("the active TTS backend does not support speed changes")
+        result = setter(float(speech_speed))
+        if inspect.isawaitable(result):
+            await result
+        hangover_frames = max(1, math.ceil(end_silence_ms / VAD_FRAME_MS))
+        turn_config = replace(self._turns.config, hangover_frames=hangover_frames)
+        self._turns.config = turn_config
+        self._config = replace(self._config, turn=turn_config)
+        effective_silence_ms = hangover_frames * VAD_FRAME_MS
+        await self._send(
+            VoiceSettingsState(
+                speech_speed=float(speech_speed),
+                end_silence_ms=effective_silence_ms,
+            )
+        )
+        logger.info(
+            "voice settings: speed=%.2f end_silence_ms=%d frames=%d",
+            speech_speed,
+            effective_silence_ms,
+            hangover_frames,
+        )
 
     async def list_topics(self, *, query: str = "", limit: int = 100) -> tuple[Any, ...]:
         await self._wait_until_ready()

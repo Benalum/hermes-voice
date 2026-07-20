@@ -20,6 +20,15 @@ TTS_SAMPLE_RATE = 24_000
 DEFAULT_TIMEOUT_SECONDS = 180.0
 
 
+def _validate_speed(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError("speech speed must be a number")
+    resolved = float(value)
+    if not math.isfinite(resolved) or not 0.5 <= resolved <= 2.0:
+        raise ValueError("speech speed must be between 0.5 and 2.0")
+    return resolved
+
+
 class RemoteSpeechError(RuntimeError):
     """A shared-speech request failed or returned an invalid payload."""
 
@@ -152,7 +161,7 @@ class RemoteSpeechPorts:
         )
         self._warmup_lock = asyncio.Lock()
         self._voice = voice
-        self._speed = speed
+        self._speed = _validate_speed(speed)
         self._ready = False
         self._closed = False
 
@@ -163,11 +172,9 @@ class RemoteSpeechPorts:
             raise ValueError("HV_SPEECH_SERVICE_TOKEN must contain at least 32 bytes")
         raw_speed = os.environ.get("HV_KOKORO_SPEED", "1.0")
         try:
-            speed = float(raw_speed)
+            speed = _validate_speed(float(raw_speed))
         except ValueError as exc:
-            raise ValueError("HV_KOKORO_SPEED must be a number") from exc
-        if not math.isfinite(speed) or not 0.5 <= speed <= 2.0:
-            raise ValueError("HV_KOKORO_SPEED must be between 0.5 and 2.0")
+            raise ValueError("HV_KOKORO_SPEED must be between 0.5 and 2.0") from exc
         return cls(
             base_url=_service_url(),
             client_id=_required_env("HV_SPEECH_CLIENT_ID"),
@@ -269,6 +276,10 @@ class RemoteSpeechPorts:
             threshold=threshold,
             reason=reason,
         )
+
+    def set_speed(self, speed: float) -> None:
+        """Change the speed used by future shared TTS requests."""
+        self._speed = _validate_speed(speed)
 
     async def synthesize(self, text: str) -> bytes:
         payload: dict[str, object] = {"text": text, "speed": self._speed}

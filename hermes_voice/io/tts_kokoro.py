@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import math
+import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -10,15 +12,40 @@ import numpy as np
 
 DEFAULT_MODEL = "mlx-community/Kokoro-82M-bf16"
 DEFAULT_VOICE = "af_heart"
+DEFAULT_SPEED = 1.0
 SAMPLE_RATE = 24000
 
 
+def _validate_speed(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError("HV_KOKORO_SPEED must be a number")
+    resolved = float(value)
+    if not math.isfinite(resolved) or not 0.5 <= resolved <= 2.0:
+        raise ValueError("HV_KOKORO_SPEED must be between 0.5 and 2.0")
+    return resolved
+
+
 class KokoroTts:
-    def __init__(self, model_id: str = DEFAULT_MODEL, voice: str = DEFAULT_VOICE) -> None:
+    def __init__(
+        self,
+        model_id: str = DEFAULT_MODEL,
+        voice: str = DEFAULT_VOICE,
+        speed: float | None = None,
+    ) -> None:
         self._model_id = model_id
         self._voice = voice
+        raw_speed: object = (
+            speed
+            if speed is not None
+            else float(os.environ.get("HV_KOKORO_SPEED", str(DEFAULT_SPEED)))
+        )
+        self._speed = _validate_speed(raw_speed)
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts")
         self._model: Any = None
+
+    def set_speed(self, speed: float) -> None:
+        """Change the speed used by future synthesis calls."""
+        self._speed = _validate_speed(speed)
 
     async def warmup(self) -> None:
         await asyncio.get_running_loop().run_in_executor(self._executor, self._load)
@@ -40,7 +67,11 @@ class KokoroTts:
         model = self._load()
         chunks = [
             np.asarray(segment.audio, dtype=np.float32)
-            for segment in model.generate(text=text, voice=self._voice)
+            for segment in model.generate(
+                text=text,
+                voice=self._voice,
+                speed=self._speed,
+            )
         ]
         if not chunks:
             return b""

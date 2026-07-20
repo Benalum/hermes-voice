@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -16,6 +17,15 @@ DEFAULT_VOICE = "af_heart"
 DEFAULT_SPEED = 1.0
 
 SAMPLE_RATE = 24_000
+
+
+def _validate_speed(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError("HV_KOKORO_SPEED must be a number")
+    resolved = float(value)
+    if not math.isfinite(resolved) or not 0.5 <= resolved <= 2.0:
+        raise ValueError("HV_KOKORO_SPEED must be between 0.5 and 2.0")
+    return resolved
 
 
 class PortableKokoroTts:
@@ -46,15 +56,9 @@ class PortableKokoroTts:
         )
 
         try:
-            resolved_speed = float(raw_speed)
-
+            self._speed = _validate_speed(float(raw_speed))
         except ValueError as exc:
-            raise ValueError("HV_KOKORO_SPEED must be a number") from exc
-
-        if resolved_speed <= 0:
-            raise ValueError("HV_KOKORO_SPEED must be greater than zero")
-
-        self._speed = resolved_speed
+            raise ValueError("HV_KOKORO_SPEED must be between 0.5 and 2.0") from exc
 
         self._executor = ThreadPoolExecutor(
             max_workers=1,
@@ -62,6 +66,10 @@ class PortableKokoroTts:
         )
 
         self._pipeline: Any = None
+
+    def set_speed(self, speed: float) -> None:
+        """Change the speed used by future synthesis calls."""
+        self._speed = _validate_speed(speed)
 
     async def warmup(self) -> None:
         """Load Kokoro without blocking the asyncio event loop."""
