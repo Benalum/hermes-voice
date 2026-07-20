@@ -34,8 +34,8 @@ def make_store(tmp_path: Path) -> StudyStore:
     )
 
 
-def test_study_app_preserves_health_and_adds_study_routes(tmp_path: Path) -> None:
-    app = create_app(
+def make_app(tmp_path: Path):
+    return create_app(
         mode="parrot",
         vad=FakeVad(),
         stt=FakeStt(),
@@ -43,7 +43,9 @@ def test_study_app_preserves_health_and_adds_study_routes(tmp_path: Path) -> Non
         study_store=make_store(tmp_path),
     )
 
-    with TestClient(app) as client:
+
+def test_study_app_preserves_health_and_adds_study_routes(tmp_path: Path) -> None:
+    with TestClient(make_app(tmp_path)) as client:
         health = client.get("/healthz")
         assert health.status_code == 200
         assert health.json()["status"] == "ok"
@@ -60,3 +62,29 @@ def test_study_app_preserves_health_and_adds_study_routes(tmp_path: Path) -> Non
         decks = client.get("/api/study/decks")
         assert decks.status_code == 200
         assert decks.json() == {"decks": []}
+
+
+def test_mcat_reference_media_is_served_inline(tmp_path: Path) -> None:
+    with TestClient(make_app(tmp_path)) as client:
+        installed = client.post("/api/study/starter-packs/mcat-foundations")
+        assert installed.status_code == 200
+
+        decks = client.get("/api/study/decks").json()["decks"]
+        biology = next(
+            deck
+            for deck in decks
+            if deck["name"] == "MCAT Biology: Cells, Genetics & Organ Systems"
+        )
+        cards = client.get(f"/api/study/decks/{biology['id']}/cards").json()["cards"]
+        transport = next(
+            card
+            for card in cards
+            if card["question"].startswith("How do simple diffusion")
+        )
+        media_url = transport["media"]["question"][0]["url"]
+
+        image = client.get(media_url)
+        assert image.status_code == 200
+        assert image.headers["content-type"].startswith("image/svg+xml")
+        assert image.headers["content-disposition"].startswith("inline;")
+        assert image.content.startswith(b"<svg")
