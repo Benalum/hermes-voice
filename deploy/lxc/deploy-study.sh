@@ -19,7 +19,29 @@ SERVICE=hermes-voice.service
 BRANCH="${HERMES_STUDY_BRANCH:?}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP="/var/backups/hermes-voice-study/$STAMP"
-DROPIN=/etc/systemd/system/hermes-voice.service.d/study.conf
+DROPIN_DIR=/etc/systemd/system/hermes-voice.service.d
+DROPIN="$DROPIN_DIR/study.conf"
+ROLLBACK_ARMED=false
+OLD_HEAD=
+
+rollback() {
+  local rc=$?
+  trap - ERR
+  if [[ "$ROLLBACK_ARMED" == true ]]; then
+    echo "Deployment failed; restoring the previous Hermes Voice state." >&2
+    cd "$REPO"
+    git switch --detach "$OLD_HEAD" || true
+    rm -rf "$DROPIN_DIR"
+    if [[ -d "$BACKUP/hermes-voice.service.d" ]]; then
+      cp -a "$BACKUP/hermes-voice.service.d" "$DROPIN_DIR"
+    fi
+    systemctl daemon-reload || true
+    systemctl restart "$SERVICE" || true
+    systemctl --no-pager --full status "$SERVICE" || true
+  fi
+  exit "$rc"
+}
+trap rollback ERR
 
 [[ -d "$REPO/.git" ]] || { echo "Missing repository: $REPO" >&2; exit 1; }
 [[ -x "$REPO/.venv/bin/python" ]] || { echo "Missing virtual environment" >&2; exit 1; }
@@ -31,7 +53,8 @@ cd "$REPO"
 OLD_HEAD="$(git rev-parse HEAD)"
 printf '%s\n' "$OLD_HEAD" > "$BACKUP/previous-head.txt"
 systemctl cat "$SERVICE" > "$BACKUP/hermes-voice.service.txt"
-cp -a /etc/systemd/system/hermes-voice.service.d "$BACKUP/" 2>/dev/null || true
+cp -a "$DROPIN_DIR" "$BACKUP/" 2>/dev/null || true
+ROLLBACK_ARMED=true
 
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "Refusing to deploy over uncommitted changes:" >&2
@@ -56,7 +79,7 @@ if "$REPO/.venv/bin/python" -m pytest --version >/dev/null 2>&1; then
 fi
 
 install -d -o hermes -g hermes -m 0700 /var/lib/hermes-voice/study
-install -d -m 0755 /etc/systemd/system/hermes-voice.service.d
+install -d -m 0755 "$DROPIN_DIR"
 cat > "$DROPIN" <<'UNIT'
 [Service]
 Environment=HV_STUDY_DIR=/var/lib/hermes-voice/study
@@ -110,6 +133,8 @@ print(json.dumps({
 PY
 
 systemctl --no-pager --full status "$SERVICE"
+ROLLBACK_ARMED=false
+trap - ERR
 echo "Backup and rollback metadata: $BACKUP"
 echo "Previous commit: $OLD_HEAD"
 echo "Deployed commit: $NEW_HEAD"
