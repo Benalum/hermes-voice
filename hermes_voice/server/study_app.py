@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
@@ -88,7 +88,7 @@ def _wrap_telegram_relay(store: StudyStore) -> None:
         def __getattr__(self, name: str) -> Any:
             return getattr(self._study, name)
 
-    telegram_telethon.TelegramRelay = StudyTelegramRelay  # type: ignore[misc]
+    telegram_telethon.TelegramRelay = cast(Any, StudyTelegramRelay)
 
 
 def _install_voice_index(app: FastAPI) -> None:
