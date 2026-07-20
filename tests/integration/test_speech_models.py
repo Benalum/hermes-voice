@@ -13,9 +13,7 @@ SAMPLE_RATE = 16000
 def tone(frequency: float, seconds: float) -> bytes:
     samples = int(SAMPLE_RATE * seconds)
     return b"".join(
-        struct.pack(
-            "<h", int(12000 * math.sin(2 * math.pi * frequency * i / SAMPLE_RATE))
-        )
+        struct.pack("<h", int(12000 * math.sin(2 * math.pi * frequency * i / SAMPLE_RATE)))
         for i in range(samples)
     )
 
@@ -40,9 +38,7 @@ class TestKokoroTts:
         tts = KokoroTts()
         pcm = await tts.synthesize("Hello from the voice gateway.")
         assert len(pcm) > 24000  # > 0.5s of 24 kHz int16 audio
-        peak = max(
-            abs(s[0]) for s in struct.iter_unpack("<h", pcm)
-        )
+        peak = max(abs(s[0]) for s in struct.iter_unpack("<h", pcm))
         assert peak > 1000
 
 

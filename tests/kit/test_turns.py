@@ -12,9 +12,7 @@ CONFIG = TurnConfig(
 )
 
 
-def feed_frames(
-    tm: TurnManager, probs: list[float], *, speaking: bool = False
-) -> list[object]:
+def feed_frames(tm: TurnManager, probs: list[float], *, speaking: bool = False) -> list[object]:
     events: list[object] = []
     for prob in probs:
         events.extend(tm.feed(FRAME, prob, speaking=speaking))

@@ -102,7 +102,7 @@ def _install_voice_index(app: FastAPI) -> None:
         marker = "<h1>HERMES VOICE</h1>"
         if tab not in html:
             html = html.replace(marker, marker + "\n    " + tab, 1)
-        if "id=\"study-live\"" not in html:
+        if 'id="study-live"' not in html:
             html = html.replace("</body>", _STUDY_PANEL + "\n</body>", 1)
         if "/static/study-live.mjs" not in html:
             script = '<script type="module" src="/static/study-live.mjs"></script>'

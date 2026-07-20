@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Literal, TypeVar
+from typing import Literal, TypeVar
 
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse
@@ -184,9 +184,7 @@ def create_study_router(store: StudyStore) -> APIRouter:
 
     @router.post("/sessions/{session_id}/grade")
     def grade(session_id: str, payload: GradeCreate) -> dict[str, object]:
-        return {
-            "session": _translate(lambda: store.grade(session_id, payload.outcome))
-        }
+        return {"session": _translate(lambda: store.grade(session_id, payload.outcome))}
 
     @router.post("/sessions/{session_id}/finish")
     def finish(session_id: str) -> dict[str, object]:

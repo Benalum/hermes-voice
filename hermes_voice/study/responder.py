@@ -185,9 +185,7 @@ class StudyResponder:
         decks = self._store.list_decks()
         if not decks:
             return "You do not have any study decks yet. Open the Study page to create one."
-        rendered = ", ".join(
-            f"{deck['name']} with {deck['card_count']} cards" for deck in decks
-        )
+        rendered = ", ".join(f"{deck['name']} with {deck['card_count']} cards" for deck in decks)
         return f"Your decks are: {rendered}."
 
 

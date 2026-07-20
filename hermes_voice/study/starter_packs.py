@@ -29,8 +29,7 @@ MCAT_FOUNDATIONS: tuple[StarterDeck, ...] = (
         "cards": (
             {
                 "question": (
-                    "How do simple diffusion, facilitated diffusion, and active "
-                    "transport differ?"
+                    "How do simple diffusion, facilitated diffusion, and active transport differ?"
                 ),
                 "answer": (
                     "Simple and facilitated diffusion move substances down an "
@@ -125,9 +124,7 @@ MCAT_FOUNDATIONS: tuple[StarterDeck, ...] = (
                 ),
             },
             {
-                "question": (
-                    "How does a competitive inhibitor change apparent Km and Vmax?"
-                ),
+                "question": ("How does a competitive inhibitor change apparent Km and Vmax?"),
                 "answer": (
                     "It increases apparent Km because more substrate is needed to reach half "
                     "Vmax, while Vmax remains unchanged because sufficiently high substrate "
@@ -141,9 +138,7 @@ MCAT_FOUNDATIONS: tuple[StarterDeck, ...] = (
             },
             {
                 "question": "What are the net products of glycolysis per glucose molecule?",
-                "answer": (
-                    "Two pyruvate, two net ATP, two NADH, and two water molecules."
-                ),
+                "answer": ("Two pyruvate, two net ATP, two NADH, and two water molecules."),
                 "notes": (
                     "Glycolysis invests two ATP and later produces four. Under anaerobic "
                     "conditions, fermentation regenerates NAD+ so glycolysis can continue; "
@@ -440,8 +435,7 @@ def install_mcat_foundations(store: StudyStore) -> dict[str, int]:
             )
             decks_created += 1
         existing = {
-            str(card["question"]).strip().casefold()
-            for card in store.list_cards(int(deck["id"]))
+            str(card["question"]).strip().casefold() for card in store.list_cards(int(deck["id"]))
         }
         for pack_card in pack_deck["cards"]:
             key = pack_card["question"].strip().casefold()

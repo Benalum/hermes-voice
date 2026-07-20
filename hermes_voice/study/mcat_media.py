@@ -121,8 +121,7 @@ def install_mcat_media(store: StudyStore) -> dict[str, int]:
                 ).fetchone()[0]
             )
             db.execute(
-                "INSERT INTO card_media(card_id,media_id,section,position) "
-                "VALUES(?,?,?,?)",
+                "INSERT INTO card_media(card_id,media_id,section,position) VALUES(?,?,?,?)",
                 (card_id, media_id, section, position),
             )
             attached += 1

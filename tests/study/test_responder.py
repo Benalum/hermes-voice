@@ -28,7 +28,9 @@ async def test_voice_study_commands_stay_local(tmp_path: Path) -> None:
     root = tmp_path / "study"
     store = StudyStore(StudyPaths(root=root, database=root / "study.sqlite3", media=root / "media"))
     deck = store.create_deck("MCAT Biology")
-    store.create_card(deck["id"], question="What organelle produces ATP?", answer="The mitochondrion.")
+    store.create_card(
+        deck["id"], question="What organelle produces ATP?", answer="The mitochondrion."
+    )
     events: list[sm.Event] = []
     delegate = Delegate()
     responder = StudyResponder(store=store, delegate=delegate, emit=events.append)
