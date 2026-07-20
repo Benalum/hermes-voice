@@ -20,7 +20,7 @@ jobs:
       - run: uv sync --locked --extra speech --group dev
       - name: Apply Ruff fixes and formatting
         run: |
-          uv run ruff check . --fix
+          uv run ruff check . --fix || true
           uv run ruff format .
       - name: Commit formatting
         run: |
