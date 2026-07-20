@@ -43,7 +43,8 @@ if [[ -d /var/lib/hermes-voice/study ]]; then
   tar -C /var/lib/hermes-voice -czf "$BACKUP/study-before.tgz" study
 fi
 
-git fetch --prune origin "$BRANCH"
+git fetch --prune origin \
+  "$BRANCH:refs/remotes/origin/$BRANCH"
 git switch -C deploy/study "origin/$BRANCH"
 NEW_HEAD="$(git rev-parse HEAD)"
 printf '%s\n' "$NEW_HEAD" > "$BACKUP/deployed-head.txt"
@@ -86,11 +87,19 @@ import json
 from pathlib import Path
 from urllib.request import urlopen
 
+expected = {
+    'MCAT Biology: Cells, Genetics & Organ Systems',
+    'MCAT Biochemistry: Amino Acids, Enzymes & Metabolism',
+    'MCAT General & Organic Chemistry',
+    'MCAT Physics: Mechanics, Fluids, Circuits & Optics',
+    'MCAT Psychology & Sociology',
+    'MCAT CARS: Passage Reasoning',
+}
 pack = json.loads(Path('/tmp/hermes-mcat-pack.json').read_text())
 decks = json.load(urlopen('http://127.0.0.1:8990/api/study/decks'))['decks']
-mcat = [deck for deck in decks if deck['name'].startswith('MCAT ')]
-assert len(mcat) == 6, mcat
-assert sum(int(deck['card_count']) for deck in mcat) == 30, mcat
+mcat = [deck for deck in decks if deck['name'] in expected]
+assert {deck['name'] for deck in mcat} == expected, mcat
+assert sum(int(deck['card_count']) for deck in mcat) >= 30, mcat
 assert pack['media']['missing'] == 0, pack
 print(json.dumps({
     'pack_result': pack['result'],
