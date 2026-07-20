@@ -21,44 +21,6 @@ from hermes_voice.study.store import StudyStore
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 MakeResponder = Callable[[Callable[[sm.Event], None]], ResponderPort]
 
-_STUDY_PANEL = """
-<section id="study-live" hidden aria-live="polite">
-  <div class="study-live-heading">
-    <div>
-      <p>Active study session</p>
-      <h2 id="study-live-title">Study</h2>
-    </div>
-    <span id="study-live-progress"></span>
-  </div>
-  <div id="study-live-question"></div>
-  <div id="study-live-question-media" class="study-live-media"></div>
-  <div id="study-live-answer" hidden></div>
-  <div id="study-live-answer-media" class="study-live-media"></div>
-  <div id="study-live-notes" hidden></div>
-</section>
-"""
-
-_STUDY_STYLE = """
-<style>
-  #study-tab { color:#8ab4ff; text-decoration:none; font-weight:700; padding:.45rem .8rem;
-    border:1px solid #33333e; border-radius:999px; background:#1c1c24; }
-  #study-live { box-sizing:border-box; width:min(760px,calc(100% - 2rem)); margin:1rem auto 0;
-    padding:1rem; border:1px solid #33333e; border-radius:14px; background:#181820; }
-  .study-live-heading { display:flex; justify-content:space-between; gap:1rem; align-items:start; }
-  .study-live-heading p { margin:0; color:#8ab4ff; font-size:.75rem; font-weight:700;
-    letter-spacing:.1em; text-transform:uppercase; }
-  .study-live-heading h2 { margin:.2rem 0 .8rem; font-size:1.1rem; }
-  #study-live-progress { color:#a9a9b5; font-size:.85rem; }
-  #study-live-question,#study-live-answer,#study-live-notes {
-    white-space:pre-wrap; margin:.6rem 0; }
-  #study-live-answer { padding-top:.7rem; border-top:1px solid #33333e; }
-  #study-live-notes { color:#a9a9b5; }
-  .study-live-media { display:grid; gap:.65rem; margin:.65rem 0; }
-  .study-live-media img { display:block; width:100%; max-height:440px; object-fit:contain;
-    background:#0b0b0f; border:1px solid #33333e; border-radius:10px; }
-</style>
-"""
-
 
 def _wrap_telegram_relay(store: StudyStore) -> None:
     from hermes_voice.io import telegram_telethon
@@ -97,6 +59,7 @@ def _wrap_telegram_relay(store: StudyStore) -> None:
 
 
 def _install_voice_index(app: FastAPI) -> None:
+    """Keep the Study navigation link without embedding a session panel."""
     app.router.routes[:] = [
         route for route in app.router.routes if getattr(route, "path", None) != "/"
     ]
@@ -108,13 +71,6 @@ def _install_voice_index(app: FastAPI) -> None:
         marker = "<h1>HERMES VOICE</h1>"
         if tab not in html:
             html = html.replace(marker, marker + "\n    " + tab, 1)
-        if 'id="study-live"' not in html:
-            html = html.replace("</body>", _STUDY_PANEL + "\n</body>", 1)
-        if "/static/study-live.mjs" not in html:
-            script = '<script type="module" src="/static/study-live.mjs"></script>'
-            html = html.replace("</body>", script + "\n</body>", 1)
-        if "#study-live" not in html:
-            html = html.replace("</head>", _STUDY_STYLE + "\n</head>", 1)
         return HTMLResponse(html)
 
 
