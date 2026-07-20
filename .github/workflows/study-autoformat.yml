@@ -1,14 +1,15 @@
 name: Study autoformat
 
 on:
-  push:
-    branches: [agent/portable-study-sessions]
+  pull_request:
+    branches: [feat/portable-container-stack]
 
 permissions:
   contents: write
 
 jobs:
   format:
+    if: github.head_ref == 'agent/portable-study-sessions'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
