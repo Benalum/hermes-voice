@@ -53,7 +53,8 @@ def test_study_app_preserves_health_and_adds_study_routes(tmp_path: Path) -> Non
         voice_page = client.get("/")
         assert voice_page.status_code == 200
         assert 'href="/study"' in voice_page.text
-        assert 'id="study-live"' in voice_page.text
+        assert 'id="study-live"' not in voice_page.text
+        assert "/static/study-live.mjs" not in voice_page.text
 
         study_page = client.get("/study")
         assert study_page.status_code == 200
