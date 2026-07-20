@@ -1,2 +1,0 @@
-hermes_voice/server/study_app.py:91: error: Cannot assign to a type  [misc]
-Found 1 error in 1 file (checked 37 source files)
