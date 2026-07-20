@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hermes Study</title>
+  <link rel="stylesheet" href="/static/study.css?v=20260720-1">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">HERMES</a>
+    <nav aria-label="Hermes sections">
+      <a href="/">Voice</a>
+      <a class="active" href="/study" aria-current="page">Study</a>
+    </nav>
+    <button id="new-deck" type="button">+ New deck</button>
+  </header>
+  <main class="layout">
+    <aside class="sidebar"><div class="sidebar-heading"><div><p class="eyebrow">Library</p><h1>Study decks</h1></div></div><div id="deck-list" class="deck-list"></div></aside>
+    <section class="workspace">
+      <div id="empty-state" class="empty-state"><h2>Create your first deck</h2><p>Build cards with questions, answers, notes, and images. Hermes can then study them with you by voice.</p><button id="empty-new-deck" type="button">Create deck</button></div>
+      <div id="deck-workspace" hidden>
+        <section class="deck-header panel"><div><p class="eyebrow">Selected deck</p><h2 id="deck-title"></h2><p id="deck-description"></p><p id="deck-stats" class="muted"></p></div><div class="actions"><button id="study-deck" class="primary" type="button">Start study session</button><button id="edit-deck" type="button">Edit deck</button><button id="delete-deck" class="danger" type="button">Delete deck</button></div></section>
+        <section class="cards-heading"><div><p class="eyebrow">Cards</p><h2>Questions and answers</h2></div><button id="new-card" type="button">+ New card</button></section>
+        <div id="card-list" class="card-list"></div>
+      </div>
+    </section>
+    <aside id="session-panel" class="session-panel" hidden>
+      <div class="session-heading"><div><p class="eyebrow">Live session</p><h2 id="session-deck"></h2></div><button id="finish-session" class="icon-button" type="button" aria-label="End session">×</button></div>
+      <p id="session-progress" class="muted"></p>
+      <article class="study-card"><section><p class="section-label">Question</p><div id="session-question" class="card-copy"></div><div id="session-question-images" class="media-grid"></div></section><section id="session-answer-area" hidden><p class="section-label">Answer</p><div id="session-answer" class="card-copy"></div><div id="session-answer-images" class="media-grid"></div><div id="session-notes-area" hidden><p class="section-label">Notes</p><div id="session-notes" class="card-copy notes"></div><div id="session-notes-images" class="media-grid"></div></div></section></article>
+      <button id="reveal-answer" class="primary wide" type="button">Show answer</button>
+      <div id="grade-actions" class="grade-actions" hidden><button data-grade="wrong" class="danger" type="button">Wrong</button><button data-grade="correct" class="success" type="button">Correct</button><button data-grade="skipped" type="button">Skip</button></div>
+      <p class="voice-tip">Voice commands: “correct,” “wrong,” “skip,” “show answer,” or “end study session.”</p>
+    </aside>
+  </main>
+  <dialog id="deck-dialog"><form id="deck-form" method="dialog"><input id="deck-id" type="hidden"><h2 id="deck-dialog-title">New deck</h2><label>Deck name<input id="deck-name" maxlength="120" required></label><label>Description<textarea id="deck-description-input" maxlength="4000" rows="4"></textarea></label><p id="deck-error" class="form-error"></p><div class="dialog-actions"><button value="cancel" type="button" data-close-dialog>Cancel</button><button class="primary" type="submit">Save deck</button></div></form></dialog>
+  <dialog id="card-dialog"><form id="card-form" method="dialog"><input id="card-id" type="hidden"><h2 id="card-dialog-title">New card</h2><label>Question<textarea id="card-question" maxlength="20000" rows="5" required></textarea></label><label class="media-input">Question images<input id="question-images" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><div id="question-media-existing" class="media-editor"></div><label>Answer<textarea id="card-answer" maxlength="20000" rows="5" required></textarea></label><label class="media-input">Answer images<input id="answer-images" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><div id="answer-media-existing" class="media-editor"></div><label>Notes<textarea id="card-notes" maxlength="40000" rows="4"></textarea></label><label class="media-input">Notes images<input id="notes-images" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><div id="notes-media-existing" class="media-editor"></div><p id="card-error" class="form-error"></p><div class="dialog-actions"><button value="cancel" type="button" data-close-dialog>Cancel</button><button class="primary" type="submit">Save card</button></div></form></dialog>
+  <script type="module" src="/static/study.mjs?v=20260720-1"></script>
+</body>
+</html>
