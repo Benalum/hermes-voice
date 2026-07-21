@@ -94,10 +94,17 @@ jobs:
             tests/study/test_phase1_content.py \
             tests/study/test_app.py
 
-      - name: Ruff Phase 1 standard rules
-        run: |
-          uv run ruff check --select E,F,I,UP --ignore E501,F811 \
-            hermes_voice/study/phase1_content.py
+      - name: Ruff Phase 1 E rules
+        run: uv run ruff check --select E --ignore E501 hermes_voice/study/phase1_content.py
+
+      - name: Ruff Phase 1 F rules
+        run: uv run ruff check --select F --ignore F811 hermes_voice/study/phase1_content.py
+
+      - name: Ruff Phase 1 import rules
+        run: uv run ruff check --select I hermes_voice/study/phase1_content.py
+
+      - name: Ruff Phase 1 upgrade rules
+        run: uv run ruff check --select UP hermes_voice/study/phase1_content.py
 
       - name: Ruff Phase 1 bugbear and simplification rules
         run: |
