@@ -128,7 +128,9 @@ def test_due_cards_are_ordered_and_limited(tmp_path: Path) -> None:
 def test_deleting_card_removes_review_state(tmp_path: Path) -> None:
     study, curricula = _stores(tmp_path)
     deck = study.create_deck("Psychology")
-    card = study.create_card(int(deck["id"]), question="What is memory?", answer="Stored information.")
+    card = study.create_card(
+        int(deck["id"]), question="What is memory?", answer="Stored information."
+    )
     card_id = int(card["id"])
     curricula.record_review(card_id, "good")
 

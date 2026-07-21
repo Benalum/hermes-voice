@@ -26,9 +26,7 @@ class FakeTts:
 
 def _app(tmp_path: Path):
     root = tmp_path / "study"
-    store = StudyStore(
-        StudyPaths(root=root, database=root / "study.sqlite3", media=root / "media")
-    )
+    store = StudyStore(StudyPaths(root=root, database=root / "study.sqlite3", media=root / "media"))
     return create_app(
         mode="parrot",
         vad=FakeVad(),
@@ -41,9 +39,7 @@ def _app(tmp_path: Path):
 def test_app_installs_foundation_curriculum_and_returns_ordered_courses(tmp_path: Path) -> None:
     with TestClient(_app(tmp_path)) as client:
         listed = client.get("/api/study/curricula")
-        detail = client.get(
-            "/api/study/curricula/mcat-medical-foundations-phase-1"
-        )
+        detail = client.get("/api/study/curricula/mcat-medical-foundations-phase-1")
 
     assert listed.status_code == 200
     assert listed.json()["curricula"][0]["course_count"] == 22
@@ -64,9 +60,9 @@ def test_bind_review_and_due_flow(tmp_path: Path) -> None:
             json={"question": "What is active recall?", "answer": "Retrieving from memory."},
         ).json()["card"]
 
-        curriculum = client.get(
-            "/api/study/curricula/mcat-medical-foundations-phase-1"
-        ).json()["curriculum"]
+        curriculum = client.get("/api/study/curricula/mcat-medical-foundations-phase-1").json()[
+            "curriculum"
+        ]
         curriculum_deck_key = curriculum["courses"][0]["decks"][0]["key"]
         bound = client.post(
             f"/api/study/curriculum-decks/{curriculum_deck_key}/bind",

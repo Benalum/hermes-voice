@@ -220,9 +220,7 @@ class CurriculumStore:
 
     def get_curriculum(self, key: str) -> Curriculum:
         with self._connect() as db:
-            curriculum_row = db.execute(
-                "SELECT * FROM curricula WHERE key=?", (key,)
-            ).fetchone()
+            curriculum_row = db.execute("SELECT * FROM curricula WHERE key=?", (key,)).fetchone()
             if curriculum_row is None:
                 raise StudyNotFoundError("curriculum not found")
             course_rows = db.execute(
@@ -331,7 +329,9 @@ class CurriculumStore:
         current = self.get_review_state(card_id)
         moment = reviewed_at or datetime.now(UTC)
         stability, difficulty, interval_days, lapse_delta = _next_schedule(current, rating)
-        due_at = None if rating == "skipped" else (moment + timedelta(days=interval_days)).isoformat()
+        due_at = (
+            None if rating == "skipped" else (moment + timedelta(days=interval_days)).isoformat()
+        )
         review_count = current.review_count + (0 if rating == "skipped" else 1)
         with self._connect() as db:
             db.execute(
