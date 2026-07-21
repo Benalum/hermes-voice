@@ -28,6 +28,37 @@ jobs:
       - name: Sync development environment
         run: uv sync --dev
 
+      - name: Import Phase 1 content module
+        run: |
+          uv run python - <<'PY'
+          from hermes_voice.study.phase1_content import COURSES, PACK_KEY
+          print(PACK_KEY, len(COURSES))
+          assert len(COURSES) == 22
+          PY
+
+      - name: Install Phase 1 content into clean store
+        run: |
+          uv run python - <<'PY'
+          from tempfile import TemporaryDirectory
+          from pathlib import Path
+          from hermes_voice.study.curriculum import foundation_curriculum_skeleton
+          from hermes_voice.study.curriculum_store import CurriculumStore
+          from hermes_voice.study.phase1_content import install_phase1_content
+          from hermes_voice.study.store import StudyPaths, StudyStore
+
+          with TemporaryDirectory() as directory:
+              root = Path(directory) / "study"
+              paths = StudyPaths(root=root, database=root / "study.sqlite3", media=root / "media")
+              store = StudyStore(paths)
+              curriculum_store = CurriculumStore(paths)
+              curriculum_store.install_curriculum(foundation_curriculum_skeleton())
+              result = install_phase1_content(store, curriculum_store)
+              print(result)
+              assert result["courses"] == 22
+              assert result["total_cards"] == 666
+              assert result["bindings"] == 22
+          PY
+
       - name: Phase 1 content pack test
         run: uv run pytest -q tests/study/test_phase1_content.py
 
