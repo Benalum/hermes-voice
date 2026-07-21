@@ -28,7 +28,7 @@ def install_study(app: FastAPI, store: StudyStore, web_dir: Path) -> None:
     runtime = CurriculumRuntime(store, curriculum_store)
 
     app.include_router(create_study_router(store))
-    app.include_router(create_pack_router(store))
+    app.include_router(create_pack_router(store, curriculum_store))
     app.include_router(create_curriculum_router(curriculum_store, runtime))
     app.state.curriculum_store = curriculum_store
     app.state.curriculum_runtime = runtime
