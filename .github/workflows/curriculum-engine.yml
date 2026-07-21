@@ -28,7 +28,10 @@ jobs:
       - name: Sync development environment
         run: uv sync --dev
 
-      - name: Focused Curriculum Engine tests
+      - name: Phase 1 content pack test
+        run: uv run pytest -q tests/study/test_phase1_content.py
+
+      - name: Curriculum and Study compatibility tests
         run: |
           uv run pytest -q \
             tests/study/test_curriculum.py \
@@ -39,8 +42,7 @@ jobs:
             tests/study/test_store.py \
             tests/study/test_responder.py \
             tests/study/test_starter_packs.py \
-            tests/study/test_app.py \
-            tests/study/test_phase1_content.py
+            tests/study/test_app.py
 
       - name: Ruff
         run: |
@@ -59,7 +61,8 @@ jobs:
             tests/study/test_curriculum_runtime.py \
             tests/study/test_curriculum_api.py \
             tests/study/test_curriculum_responder.py \
-            tests/study/test_phase1_content.py
+            tests/study/test_phase1_content.py \
+            tests/study/test_app.py
 
       - name: MyPy
         run: |
