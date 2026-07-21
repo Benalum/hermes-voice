@@ -1,8 +1,4 @@
-"""Load the versioned Phase 1 content source from its checked-in bundle.
-
-The bundle is stored as a checksum-verified gzip tar payload in the repository so the
-large curated card corpus remains deterministic without adding runtime dependencies.
-"""
+"""Load the versioned Phase 1 content source from its checked-in bundle."""
 
 from __future__ import annotations
 
@@ -11,7 +7,7 @@ import io
 import tarfile
 from pathlib import Path
 
-_BUNDLE = Path(__file__).parents[2] / ".github" / "workflows" / "build-phase1-content.yml"
+_BUNDLE = Path(__file__).with_name("phase1_content.bundle")
 _TARGET = "hermes_voice/study/phase1_content.py"
 
 
