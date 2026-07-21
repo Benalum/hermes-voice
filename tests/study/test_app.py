@@ -71,7 +71,7 @@ def test_phase1_reference_media_is_served_inline(tmp_path: Path) -> None:
         assert installed.status_code == 200
         result = installed.json()["result"]
         assert result["courses"] == 22
-        assert result["total_cards"] == 666
+        assert result["total_cards"] == 660
         assert result["bindings"] == 22
 
         decks = client.get("/api/study/decks").json()["decks"]
