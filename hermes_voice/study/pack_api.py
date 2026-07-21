@@ -1,26 +1,25 @@
-"""HTTP endpoints for installing curated Study starter packs."""
+"""HTTP endpoint for installing the versioned Phase 1 Study content pack."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from hermes_voice.study.mcat_media import install_mcat_media
-from hermes_voice.study.starter_packs import install_mcat_foundations
+from hermes_voice.study.curriculum_store import CurriculumStore
+from hermes_voice.study.phase1_content import PACK_KEY, install_phase1_content
 from hermes_voice.study.store import StudyStore
 
 
-def create_pack_router(store: StudyStore) -> APIRouter:
-    router = APIRouter(prefix="/api/study/starter-packs", tags=["study"])
+def create_pack_router(store: StudyStore, curriculum_store: CurriculumStore) -> APIRouter:
+    router = APIRouter(prefix="/api/study/content-packs", tags=["study"])
 
-    @router.post("/mcat-foundations")
+    @router.post(f"/{PACK_KEY}")
     def install_pack() -> dict[str, object]:
-        content_result = install_mcat_foundations(store)
-        media_result = install_mcat_media(store)
+        result = install_phase1_content(store, curriculum_store)
         return {
-            "pack": "mcat-foundations",
-            "result": content_result,
-            "media": media_result,
+            "pack": PACK_KEY,
+            "result": result,
             "decks": store.list_decks(),
+            "curricula": curriculum_store.list_curricula(),
         }
 
     return router
