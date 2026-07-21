@@ -94,8 +94,15 @@ jobs:
             tests/study/test_phase1_content.py \
             tests/study/test_app.py
 
-      - name: Ruff curated Phase 1 prose
-        run: uv run ruff check --ignore E501,B007 hermes_voice/study/phase1_content.py
+      - name: Ruff Phase 1 standard rules
+        run: |
+          uv run ruff check --select E,F,I,UP --ignore E501 \
+            hermes_voice/study/phase1_content.py
+
+      - name: Ruff Phase 1 bugbear and simplification rules
+        run: |
+          uv run ruff check --select B,SIM,RUF --ignore B007 \
+            hermes_voice/study/phase1_content.py
 
       - name: MyPy
         run: |
