@@ -132,16 +132,17 @@ class CurriculumStore:
             deck_keys = {deck.key for course in curriculum.courses for deck in course.decks}
             if course_keys:
                 placeholders = ",".join("?" for _ in course_keys)
-                db.execute(
-                    f"DELETE FROM curriculum_courses WHERE curriculum_key=? AND key NOT IN ({placeholders})",
-                    (curriculum.key, *sorted(course_keys)),
+                query = (
+                    "DELETE FROM curriculum_courses WHERE curriculum_key=? "
+                    f"AND key NOT IN ({placeholders})"
                 )
+                db.execute(query, (curriculum.key, *sorted(course_keys)))
             for course in curriculum.ordered_courses():
                 db.execute(
                     """
                     INSERT INTO curriculum_courses(
                       key,curriculum_key,name,position,completion_mastery,prerequisite_keys_json
-                    ) VALUES(?,?,?,?,?,json(?))
+                    ) VALUES(?,?,?,?,?,?)
                     ON CONFLICT(key) DO UPDATE SET
                       curriculum_key=excluded.curriculum_key,
                       name=excluded.name,
@@ -184,11 +185,12 @@ class CurriculumStore:
                     )
             if deck_keys:
                 placeholders = ",".join("?" for _ in deck_keys)
-                db.execute(
-                    f"DELETE FROM curriculum_decks WHERE key NOT IN ({placeholders}) AND course_key IN "
-                    "(SELECT key FROM curriculum_courses WHERE curriculum_key=?)",
-                    (*sorted(deck_keys), curriculum.key),
+                query = (
+                    f"DELETE FROM curriculum_decks WHERE key NOT IN ({placeholders}) "
+                    "AND course_key IN "
+                    "(SELECT key FROM curriculum_courses WHERE curriculum_key=?)"
                 )
+                db.execute(query, (*sorted(deck_keys), curriculum.key))
             db.execute(
                 "DELETE FROM deck_prerequisites WHERE deck_key IN "
                 "(SELECT d.key FROM curriculum_decks d JOIN curriculum_courses c "
@@ -220,7 +222,9 @@ class CurriculumStore:
 
     def get_curriculum(self, key: str) -> Curriculum:
         with self._connect() as db:
-            curriculum_row = db.execute("SELECT * FROM curricula WHERE key=?", (key,)).fetchone()
+            curriculum_row = db.execute(
+                "SELECT * FROM curricula WHERE key=?", (key,)
+            ).fetchone()
             if curriculum_row is None:
                 raise StudyNotFoundError("curriculum not found")
             course_rows = db.execute(
@@ -330,7 +334,9 @@ class CurriculumStore:
         moment = reviewed_at or datetime.now(UTC)
         stability, difficulty, interval_days, lapse_delta = _next_schedule(current, rating)
         due_at = (
-            None if rating == "skipped" else (moment + timedelta(days=interval_days)).isoformat()
+            None
+            if rating == "skipped"
+            else (moment + timedelta(days=interval_days)).isoformat()
         )
         review_count = current.review_count + (0 if rating == "skipped" else 1)
         with self._connect() as db:
