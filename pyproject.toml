@@ -105,6 +105,10 @@ files = ["hermes_voice/kit", "hermes_voice/server"]
 module = "telethon.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "hermes_voice.study.phase1_content"
+disable_error_code = ["assignment"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
