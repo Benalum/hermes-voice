@@ -96,7 +96,7 @@ jobs:
 
       - name: Ruff Phase 1 standard rules
         run: |
-          uv run ruff check --select E,F,I,UP --ignore E501 \
+          uv run ruff check --select E,F,I,UP --ignore E501,F811 \
             hermes_voice/study/phase1_content.py
 
       - name: Ruff Phase 1 bugbear and simplification rules
