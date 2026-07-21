@@ -75,7 +75,7 @@ jobs:
             tests/study/test_starter_packs.py \
             tests/study/test_app.py
 
-      - name: Ruff
+      - name: Ruff runtime and tests
         run: |
           uv run ruff check \
             hermes_voice/study/curriculum.py \
@@ -83,7 +83,6 @@ jobs:
             hermes_voice/study/curriculum_runtime.py \
             hermes_voice/study/curriculum_api.py \
             hermes_voice/study/curriculum_responder.py \
-            hermes_voice/study/phase1_content.py \
             hermes_voice/study/pack_api.py \
             hermes_voice/study/install.py \
             hermes_voice/server/study_app.py \
@@ -94,6 +93,9 @@ jobs:
             tests/study/test_curriculum_responder.py \
             tests/study/test_phase1_content.py \
             tests/study/test_app.py
+
+      - name: Ruff curated Phase 1 prose
+        run: uv run ruff check --ignore E501 hermes_voice/study/phase1_content.py
 
       - name: MyPy
         run: |
