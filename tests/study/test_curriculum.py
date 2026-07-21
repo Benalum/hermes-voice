@@ -75,7 +75,7 @@ def test_deck_unlock_explains_missing_mastery() -> None:
 
     locked = deck_unlock_decision(
         deck,
-        {"first": MasterySnapshot(good=5, wrong=5, total_cards=10)},
+        {"first": MasterySnapshot(good=5, again=5, total_cards=10)},
     )
     unlocked = deck_unlock_decision(
         deck,
