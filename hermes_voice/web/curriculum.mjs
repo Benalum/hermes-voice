@@ -1,5 +1,10 @@
 const CURRICULUM = "mcat-medical-foundations-phase-1";
 
+const stylesheet = document.createElement("link");
+stylesheet.rel = "stylesheet";
+stylesheet.href = "/static/curriculum.css?v=20260721-1";
+document.head.append(stylesheet);
+
 const byId = (id) => document.getElementById(id);
 
 async function request(path, options = {}) {
