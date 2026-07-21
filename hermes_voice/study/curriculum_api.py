@@ -10,8 +10,9 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from hermes_voice.study.curriculum import Curriculum, foundation_curriculum_skeleton
+from hermes_voice.study.curriculum_runtime import CurriculumRuntime
 from hermes_voice.study.curriculum_store import CurriculumStore, review_state_payload
-from hermes_voice.study.store import StudyNotFoundError
+from hermes_voice.study.store import StudyConflictError, StudyNotFoundError
 
 
 class DeckBinding(BaseModel):
@@ -23,7 +24,14 @@ class ReviewSubmission(BaseModel):
     reviewed_at: datetime | None = None
 
 
-def create_curriculum_router(store: CurriculumStore) -> APIRouter:
+class ReviewSessionRequest(BaseModel):
+    limit: int = Field(default=20, ge=1, le=100)
+
+
+def create_curriculum_router(
+    store: CurriculumStore,
+    runtime: CurriculumRuntime,
+) -> APIRouter:
     router = APIRouter(prefix="/api/study", tags=["study-curriculum"])
 
     @router.get("/curricula")
@@ -46,6 +54,35 @@ def create_curriculum_router(store: CurriculumStore) -> APIRouter:
         except StudyNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return {"curriculum": _curriculum_payload(curriculum)}
+
+    @router.get("/curricula/{curriculum_key}/progress")
+    def get_progress(curriculum_key: str) -> dict[str, object]:
+        try:
+            return {"progress": runtime.progress(curriculum_key)}
+        except StudyNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.post("/curricula/{curriculum_key}/continue")
+    def continue_curriculum(curriculum_key: str) -> dict[str, object]:
+        try:
+            return {"session": runtime.continue_curriculum(curriculum_key)}
+        except StudyNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except StudyConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @router.post("/curricula/{curriculum_key}/review-session")
+    def start_review_session(
+        curriculum_key: str,
+        payload: ReviewSessionRequest,
+    ) -> dict[str, object]:
+        try:
+            session = runtime.start_cumulative_review(curriculum_key, limit=payload.limit)
+        except StudyNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except StudyConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"session": session}
 
     @router.post("/curriculum-decks/{curriculum_deck_key}/bind")
     def bind_deck(curriculum_deck_key: str, payload: DeckBinding) -> dict[str, object]:
