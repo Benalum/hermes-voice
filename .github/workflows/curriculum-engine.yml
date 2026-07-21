@@ -33,7 +33,9 @@ jobs:
           uv run pytest -q \
             tests/study/test_curriculum.py \
             tests/study/test_curriculum_store.py \
+            tests/study/test_curriculum_runtime.py \
             tests/study/test_curriculum_api.py \
+            tests/study/test_curriculum_responder.py \
             tests/study/test_store.py \
             tests/study/test_responder.py \
             tests/study/test_starter_packs.py \
@@ -44,18 +46,28 @@ jobs:
           uv run ruff check \
             hermes_voice/study/curriculum.py \
             hermes_voice/study/curriculum_store.py \
+            hermes_voice/study/curriculum_runtime.py \
             hermes_voice/study/curriculum_api.py \
+            hermes_voice/study/curriculum_responder.py \
             hermes_voice/study/install.py \
+            hermes_voice/server/study_app.py \
             tests/study/test_curriculum.py \
             tests/study/test_curriculum_store.py \
-            tests/study/test_curriculum_api.py
+            tests/study/test_curriculum_runtime.py \
+            tests/study/test_curriculum_api.py \
+            tests/study/test_curriculum_responder.py
 
       - name: MyPy
         run: |
           uv run mypy --no-incremental \
             hermes_voice/study/curriculum.py \
             hermes_voice/study/curriculum_store.py \
-            hermes_voice/study/curriculum_api.py
+            hermes_voice/study/curriculum_runtime.py \
+            hermes_voice/study/curriculum_api.py \
+            hermes_voice/study/curriculum_responder.py
+
+      - name: Browser syntax
+        run: node --check hermes_voice/web/curriculum.mjs
 
       - name: Complete model-free suite
         run: uv run pytest -q
