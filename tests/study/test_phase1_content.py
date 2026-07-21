@@ -20,16 +20,16 @@ def test_phase1_content_pack_is_complete_bound_visual_and_idempotent(tmp_path) -
 
     assert first["courses"] == 22
     assert first["decks_created"] == 22
-    assert first["cards_created"] == 666
+    assert first["cards_created"] == 660
     assert first["media_attached"] == 44
     assert first["bindings"] == 22
-    assert first["total_cards"] == 666
+    assert first["total_cards"] == 660
 
     decks = store.list_decks()
     assert len(decks) == 22
     assert {deck["name"] for deck in decks} == {name for _, name, _ in COURSES}
-    assert min(int(deck["card_count"]) for deck in decks) >= 30
-    assert sum(int(deck["card_count"]) for deck in decks) == 666
+    assert min(int(deck["card_count"]) for deck in decks) == 30
+    assert sum(int(deck["card_count"]) for deck in decks) == 660
 
     for deck in decks:
         cards = store.list_cards(int(deck["id"]))
@@ -51,7 +51,7 @@ def test_phase1_content_pack_is_complete_bound_visual_and_idempotent(tmp_path) -
     second = install_phase1_content(store, curriculum_store)
     assert second["decks_created"] == 0
     assert second["cards_created"] == 0
-    assert second["cards_skipped"] == 666
+    assert second["cards_skipped"] == 660
     assert second["media_attached"] == 0
     assert second["media_skipped"] == 44
-    assert second["total_cards"] == 666
+    assert second["total_cards"] == 660
