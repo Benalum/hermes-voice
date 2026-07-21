@@ -9,7 +9,7 @@ on:
       - agent/portable-study-sessions
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.sha }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
@@ -27,6 +29,45 @@ jobs:
 
       - name: Sync development environment
         run: uv sync --dev
+
+      - name: Apply safe formatting fixes
+        if: github.event_name == 'push'
+        run: |
+          uv run ruff check --fix \
+            hermes_voice/study/curriculum.py \
+            hermes_voice/study/curriculum_store.py \
+            hermes_voice/study/curriculum_api.py \
+            hermes_voice/study/install.py \
+            tests/study/test_curriculum.py \
+            tests/study/test_curriculum_store.py \
+            tests/study/test_curriculum_api.py
+          uv run ruff format \
+            hermes_voice/study/curriculum.py \
+            hermes_voice/study/curriculum_store.py \
+            hermes_voice/study/curriculum_api.py \
+            hermes_voice/study/install.py \
+            tests/study/test_curriculum.py \
+            tests/study/test_curriculum_store.py \
+            tests/study/test_curriculum_api.py
+
+      - name: Commit formatting fixes
+        if: github.event_name == 'push'
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            hermes_voice/study/curriculum.py \
+            hermes_voice/study/curriculum_store.py \
+            hermes_voice/study/curriculum_api.py \
+            hermes_voice/study/install.py \
+            tests/study/test_curriculum.py \
+            tests/study/test_curriculum_store.py \
+            tests/study/test_curriculum_api.py
+          git commit -m "Format curriculum engine changes"
+          git push origin HEAD:agent/curriculum-engine-v2
 
       - name: Focused Curriculum Engine tests
         run: |
