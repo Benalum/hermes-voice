@@ -36,11 +36,14 @@ def _wrap_telegram_relay(store: StudyStore) -> None:
             if not callable(emit):
                 raise TypeError("TelegramRelay requires an emit callback")
             delegate = original(*args, **kwargs)
+            # Study context is resolved synchronously for each user turn. Do not
+            # inject background speech events: out-of-band AgentSpeakable and
+            # TurnSettled events can race the orchestrator's speaking/barge-in
+            # state and prevent reliable interruption of agent audio.
             self._study = StudyResponder(
                 store=store,
                 delegate=delegate,
                 emit=emit,
-                watch_sessions=True,
             )
 
         async def send(self, text: str) -> None:
