@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from hermes_voice.kit import session as sm
 from hermes_voice.kit.ports import ResponderPort
@@ -96,7 +96,9 @@ class CurriculumStudyResponder(StudyResponder):
         if card is None:
             return "This study session is finished."
         state = self._curriculum_store.record_review(int(card["id"]), rating)  # type: ignore[arg-type]
-        outcome = "wrong" if rating == "again" else "correct"
+        outcome: Literal["correct", "wrong"] = (
+            "wrong" if rating == "again" else "correct"
+        )
         updated = self._store.grade(str(session["id"]), outcome)
         label = rating.capitalize()
         schedule = ""

@@ -130,7 +130,10 @@ class CurriculumRuntime:
                   SUM(CASE WHEN crs.rating='good' THEN 1 ELSE 0 END) good_count,
                   SUM(CASE WHEN crs.rating='easy' THEN 1 ELSE 0 END) easy_count,
                   SUM(CASE WHEN crs.rating='skipped' THEN 1 ELSE 0 END) skipped_count,
-                  SUM(CASE WHEN crs.due_at IS NOT NULL AND crs.due_at<=? THEN 1 ELSE 0 END) due_cards
+                  SUM(
+                    CASE WHEN crs.due_at IS NOT NULL AND crs.due_at<=?
+                    THEN 1 ELSE 0 END
+                  ) due_cards
                 FROM curriculum_decks cd
                 JOIN curriculum_courses cc ON cc.key=cd.course_key
                 LEFT JOIN cards c ON c.deck_id=cd.deck_id
