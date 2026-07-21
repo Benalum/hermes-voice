@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from hermes_voice.study.curriculum import foundation_curriculum_skeleton
+from hermes_voice.study.curriculum import Curriculum, foundation_curriculum_skeleton
 from hermes_voice.study.curriculum_store import CurriculumStore, review_state_payload
 from hermes_voice.study.store import StudyNotFoundError
 
@@ -77,7 +78,7 @@ def create_curriculum_router(store: CurriculumStore) -> APIRouter:
 
     @router.get("/reviews/due")
     def due_reviews(
-        limit: int = Query(default=100, ge=1, le=500),
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
         at: datetime | None = None,
     ) -> dict[str, object]:
         if at is not None and at.tzinfo is None:
@@ -87,7 +88,5 @@ def create_curriculum_router(store: CurriculumStore) -> APIRouter:
     return router
 
 
-def _curriculum_payload(curriculum: object) -> dict[str, object]:
-    from dataclasses import asdict
-
-    return asdict(curriculum)  # type: ignore[arg-type]
+def _curriculum_payload(curriculum: Curriculum) -> dict[str, object]:
+    return asdict(curriculum)
