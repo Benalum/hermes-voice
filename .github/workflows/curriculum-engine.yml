@@ -9,7 +9,7 @@ on:
       - agent/portable-study-sessions
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -18,51 +18,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.sha }}
-
-      - name: Apply exact final fixes
-        if: github.event_name == 'push'
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          runtime = Path("hermes_voice/study/curriculum_runtime.py")
-          text = runtime.read_text()
-          old = "                  SUM(CASE WHEN crs.due_at IS NOT NULL AND crs.due_at<=? THEN 1 ELSE 0 END) due_cards\n"
-          new = (
-              "                  SUM(\n"
-              "                    CASE WHEN crs.due_at IS NOT NULL AND crs.due_at<=?\n"
-              "                    THEN 1 ELSE 0 END\n"
-              "                  ) due_cards\n"
-          )
-          if old in text:
-              runtime.write_text(text.replace(old, new, 1))
-
-          responder = Path("hermes_voice/study/curriculum_responder.py")
-          text = responder.read_text()
-          text = text.replace("from typing import Any\n", "from typing import Any, Literal\n", 1)
-          old = '        outcome = "wrong" if rating == "again" else "correct"\n'
-          new = (
-              '        outcome: Literal["correct", "wrong"] = (\n'
-              '            "wrong" if rating == "again" else "correct"\n'
-              '        )\n'
-          )
-          if old in text:
-              responder.write_text(text.replace(old, new, 1))
-          PY
-
-      - name: Commit exact final fixes
-        if: github.event_name == 'push'
-        run: |
-          if git diff --quiet; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add hermes_voice/study/curriculum_runtime.py hermes_voice/study/curriculum_responder.py
-          git commit -m "Fix curriculum runtime static analysis"
-          git push origin HEAD:agent/curriculum-engine-v2
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
