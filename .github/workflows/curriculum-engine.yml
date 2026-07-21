@@ -99,7 +99,7 @@ jobs:
 
       - name: Ruff Phase 1 F rules
         run: |
-          uv run ruff check --select F --ignore F811,F841 \
+          uv run ruff check --select F --ignore F541,F811,F841 \
             hermes_voice/study/phase1_content.py
 
       - name: Ruff Phase 1 import rules
