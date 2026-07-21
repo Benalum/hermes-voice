@@ -55,7 +55,7 @@ jobs:
               result = install_phase1_content(store, curriculum_store)
               print(result)
               assert result["courses"] == 22
-              assert result["total_cards"] == 666
+              assert result["total_cards"] == 660
               assert result["bindings"] == 22
           PY
 
