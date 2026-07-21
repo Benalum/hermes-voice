@@ -12,7 +12,9 @@ from fastapi.responses import HTMLResponse
 
 from hermes_voice.kit import session as sm
 from hermes_voice.kit.ports import ResponderPort
+from hermes_voice.server import app as voice_app_module
 from hermes_voice.server.app import create_app as create_voice_app
+from hermes_voice.server.immediate_barge import ImmediateBargeInOrchestrator
 from hermes_voice.server.orchestrator import ParrotResponder
 from hermes_voice.study.install import install_study, wrap_responder_factory
 from hermes_voice.study.responder import StudyResponder
@@ -61,6 +63,11 @@ def _wrap_telegram_relay(store: StudyStore) -> None:
     vars(telegram_telethon)["TelegramRelay"] = StudyTelegramRelay
 
 
+def _install_immediate_barge_in() -> None:
+    """Use the orchestrator that interrupts TTS as soon as speech is confirmed."""
+    vars(voice_app_module)["Orchestrator"] = ImmediateBargeInOrchestrator
+
+
 def _install_voice_index(app: FastAPI) -> None:
     """Keep the Study navigation link without embedding a session panel."""
     app.router.routes[:] = [
@@ -96,6 +103,7 @@ def create_app(
     elif resolved_mode != "echo":
         wrapped_responder = wrap_responder_factory(store, ParrotResponder)
 
+    _install_immediate_barge_in()
     app = create_voice_app(
         mode=mode,
         make_responder=wrapped_responder,
