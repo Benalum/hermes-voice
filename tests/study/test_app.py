@@ -65,27 +65,38 @@ def test_study_app_preserves_health_and_adds_study_routes(tmp_path: Path) -> Non
         assert decks.json() == {"decks": []}
 
 
-def test_mcat_reference_media_is_served_inline(tmp_path: Path) -> None:
+def test_phase1_reference_media_is_served_inline(tmp_path: Path) -> None:
     with TestClient(make_app(tmp_path)) as client:
-        installed = client.post("/api/study/starter-packs/mcat-foundations")
+        installed = client.post("/api/study/content-packs/mcat-phase-1-v1")
         assert installed.status_code == 200
+        result = installed.json()["result"]
+        assert result["courses"] == 22
+        assert result["total_cards"] == 666
+        assert result["bindings"] == 22
 
         decks = client.get("/api/study/decks").json()["decks"]
-        biology = next(
+        assert len(decks) == 22
+        first_deck = next(
             deck
             for deck in decks
-            if deck["name"] == "MCAT Biology: Cells, Genetics & Organ Systems"
+            if deck["name"] == "00 Learning and Scientific Reasoning"
         )
-        cards = client.get(f"/api/study/decks/{biology['id']}/cards").json()["cards"]
-        transport = next(
+        cards = client.get(f"/api/study/decks/{first_deck['id']}/cards").json()["cards"]
+        visual_card = next(
             card
             for card in cards
-            if card["question"].startswith("How do simple diffusion")
+            if card["media"]["question"]
+            or card["media"]["answer"]
+            or card["media"]["notes"]
         )
-        media_url = transport["media"]["question"][0]["url"]
+        media = (
+            visual_card["media"]["question"]
+            or visual_card["media"]["answer"]
+            or visual_card["media"]["notes"]
+        )[0]
 
-        image = client.get(media_url)
+        image = client.get(media["url"])
         assert image.status_code == 200
-        assert image.headers["content-type"].startswith("image/svg+xml")
+        assert image.headers["content-type"].startswith("image/png")
         assert image.headers["content-disposition"].startswith("inline;")
-        assert image.content.startswith(b"<svg")
+        assert image.content.startswith(b"\x89PNG\r\n\x1a\n")
