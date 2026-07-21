@@ -43,6 +43,7 @@ jobs:
 
       - name: Ruff
         run: |
+          set -o pipefail
           uv run ruff check \
             hermes_voice/study/curriculum.py \
             hermes_voice/study/curriculum_store.py \
@@ -55,19 +56,22 @@ jobs:
             tests/study/test_curriculum_store.py \
             tests/study/test_curriculum_runtime.py \
             tests/study/test_curriculum_api.py \
-            tests/study/test_curriculum_responder.py
+            tests/study/test_curriculum_responder.py \
+            2>&1 | tee ruff.txt
 
       - name: MyPy
         run: |
+          set -o pipefail
           uv run mypy --no-incremental \
             hermes_voice/study/curriculum.py \
             hermes_voice/study/curriculum_store.py \
             hermes_voice/study/curriculum_runtime.py \
             hermes_voice/study/curriculum_api.py \
-            hermes_voice/study/curriculum_responder.py
+            hermes_voice/study/curriculum_responder.py \
+            2>&1 | tee mypy.txt
 
       - name: Browser syntax
-        run: node --check hermes_voice/web/curriculum.mjs
+        run: node --check hermes_voice/web/curriculum.mjs 2>&1 | tee browser.txt
 
       - name: Complete model-free suite
         run: uv run pytest -q
