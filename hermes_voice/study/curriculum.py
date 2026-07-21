@@ -8,9 +8,10 @@ inside a curriculum.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Iterable, Literal, Mapping, Sequence
+from typing import Literal
 
 ReviewRating = Literal["again", "hard", "good", "easy", "skipped"]
 
