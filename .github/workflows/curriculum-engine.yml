@@ -9,7 +9,7 @@ on:
       - agent/portable-study-sessions
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -18,8 +18,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.sha }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
@@ -29,45 +27,6 @@ jobs:
 
       - name: Sync development environment
         run: uv sync --dev
-
-      - name: Apply safe formatting fixes
-        if: github.event_name == 'push'
-        run: |
-          uv run ruff check --fix \
-            hermes_voice/study/curriculum.py \
-            hermes_voice/study/curriculum_store.py \
-            hermes_voice/study/curriculum_api.py \
-            hermes_voice/study/install.py \
-            tests/study/test_curriculum.py \
-            tests/study/test_curriculum_store.py \
-            tests/study/test_curriculum_api.py || true
-          uv run ruff format \
-            hermes_voice/study/curriculum.py \
-            hermes_voice/study/curriculum_store.py \
-            hermes_voice/study/curriculum_api.py \
-            hermes_voice/study/install.py \
-            tests/study/test_curriculum.py \
-            tests/study/test_curriculum_store.py \
-            tests/study/test_curriculum_api.py
-
-      - name: Commit formatting fixes
-        if: github.event_name == 'push'
-        run: |
-          if git diff --quiet; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            hermes_voice/study/curriculum.py \
-            hermes_voice/study/curriculum_store.py \
-            hermes_voice/study/curriculum_api.py \
-            hermes_voice/study/install.py \
-            tests/study/test_curriculum.py \
-            tests/study/test_curriculum_store.py \
-            tests/study/test_curriculum_api.py
-          git commit -m "Format curriculum engine changes"
-          git push origin HEAD:agent/curriculum-engine-v2
 
       - name: Focused Curriculum Engine tests
         run: |
@@ -80,9 +39,7 @@ jobs:
             tests/study/test_starter_packs.py \
             tests/study/test_app.py
 
-      - name: Ruff diagnostics
-        id: ruff
-        continue-on-error: true
+      - name: Ruff
         run: |
           uv run ruff check \
             hermes_voice/study/curriculum.py \
@@ -91,36 +48,14 @@ jobs:
             hermes_voice/study/install.py \
             tests/study/test_curriculum.py \
             tests/study/test_curriculum_store.py \
-            tests/study/test_curriculum_api.py \
-            2>&1 | tee ruff.txt
-          test "${PIPESTATUS[0]}" -eq 0
+            tests/study/test_curriculum_api.py
 
-      - name: MyPy diagnostics
-        id: mypy
-        continue-on-error: true
+      - name: MyPy
         run: |
           uv run mypy --no-incremental \
             hermes_voice/study/curriculum.py \
             hermes_voice/study/curriculum_store.py \
-            hermes_voice/study/curriculum_api.py \
-            2>&1 | tee mypy.txt
-          test "${PIPESTATUS[0]}" -eq 0
-
-      - name: Upload diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: curriculum-diagnostics
-          path: |
-            ruff.txt
-            mypy.txt
-          if-no-files-found: error
-
-      - name: Require static analysis success
-        if: always()
-        run: |
-          test "${{ steps.ruff.outcome }}" = "success"
-          test "${{ steps.mypy.outcome }}" = "success"
+            hermes_voice/study/curriculum_api.py
 
       - name: Complete model-free suite
         run: uv run pytest -q
