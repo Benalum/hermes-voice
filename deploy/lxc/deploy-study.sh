@@ -134,11 +134,11 @@ result = pack['result']
 
 assert len(decks) == 22, len(decks)
 assert not ({deck['name'] for deck in decks} & legacy), decks
-assert sum(int(deck['card_count']) for deck in decks) == 666, decks
+assert sum(int(deck['card_count']) for deck in decks) == 660, decks
 assert min(int(deck['card_count']) for deck in decks) >= 30, decks
 assert result['courses'] == 22, result
 assert result['bindings'] == 22, result
-assert result['total_cards'] == 666, result
+assert result['total_cards'] == 660, result
 assert result['media_attached'] + result['media_skipped'] == 44, result
 assert len(progress['courses']) == 22, progress
 assert sum(
