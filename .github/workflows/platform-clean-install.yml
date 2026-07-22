@@ -77,27 +77,8 @@ jobs:
       - name: Ruff
         run: uv run ruff check .
 
-      - name: Capture MyPy diagnostics
-        shell: bash
-        run: |
-          set +e
-          uv run mypy --no-incremental --show-error-codes hermes_voice > mypy.log 2>&1
-          rc=$?
-          cat mypy.log
-          printf '%s\n' "$rc" > mypy.exit
-          exit 0
-
-      - name: Upload MyPy diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mypy-${{ runner.os }}-${{ matrix.backend }}
-          path: mypy.log
-          if-no-files-found: error
-
-      - name: Enforce MyPy result
-        shell: bash
-        run: exit "$(cat mypy.exit)"
+      - name: mypy
+        run: uv run mypy --no-incremental hermes_voice
 
       - name: JavaScript syntax
         run: node --check hermes_voice/web/main.js
