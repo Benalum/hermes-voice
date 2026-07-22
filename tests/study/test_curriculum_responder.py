@@ -62,6 +62,53 @@ async def test_continue_curriculum_and_rate_good(tmp_path: Path) -> None:
     assert study.current_session() is None
 
 
+@pytest.mark.parametrize(
+    ("command", "outcome"),
+    [
+        ("mark right", "correct"),
+        ("mark it right", "correct"),
+        ("mark this right", "correct"),
+        ("mark that right", "correct"),
+        ("mark correct", "correct"),
+        ("mark it correct", "correct"),
+        ("skip", "skipped"),
+        ("skip card", "skipped"),
+        ("skip the card", "skipped"),
+        ("skip this card", "skipped"),
+        ("skip that card", "skipped"),
+        ("skip it", "skipped"),
+        ("mark skipped", "skipped"),
+        ("next card", "skipped"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_natural_grade_commands_stay_local_and_advance(
+    tmp_path: Path,
+    command: str,
+    outcome: str,
+) -> None:
+    study, _, responder, events = _responder(tmp_path)
+    deck = study.create_deck("Learning")
+    first = study.create_card(int(deck["id"]), question="First question?", answer="First")
+    second = study.create_card(int(deck["id"]), question="Second question?", answer="Second")
+    session = study.start_session(int(deck["id"]), mode="ordered")
+    assert int(session["card"]["id"]) == int(first["id"])
+
+    delegate = responder._delegate
+    await responder.send(command)
+
+    assert isinstance(delegate, Delegate)
+    assert delegate.sent == []
+    assert isinstance(events[0], sm.AgentSpeakable)
+    assert "second question" in events[0].text.casefold()
+
+    current = study.current_session()
+    assert current is not None
+    assert int(current["card"]["id"]) == int(second["id"])
+    assert current["progress"][outcome] == 1
+    assert current["progress"]["completed"] == 1
+
+
 @pytest.mark.asyncio
 async def test_curriculum_progress_and_cumulative_review_are_local(tmp_path: Path) -> None:
     study, curricula, responder, events = _responder(tmp_path)
