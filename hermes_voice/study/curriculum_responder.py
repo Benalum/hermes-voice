@@ -24,6 +24,41 @@ _RATINGS = {
     "easy": "easy",
     "mark easy": "easy",
 }
+_CORRECT_ALIASES = {
+    "mark right",
+    "mark it right",
+    "mark this right",
+    "mark that right",
+    "mark correct",
+    "mark it correct",
+    "mark this correct",
+    "mark that correct",
+}
+_WRONG_ALIASES = {
+    "mark wrong",
+    "mark it wrong",
+    "mark this wrong",
+    "mark that wrong",
+    "mark incorrect",
+    "mark it incorrect",
+    "mark this incorrect",
+    "mark that incorrect",
+}
+_SKIP_ALIASES = {
+    "skip",
+    "skipped",
+    "skip card",
+    "skip the card",
+    "skip this card",
+    "skip that card",
+    "skip it",
+    "mark skip",
+    "mark it skip",
+    "mark skipped",
+    "mark it skipped",
+    "next card",
+    "go to the next card",
+}
 
 
 class CurriculumStudyResponder(StudyResponder):
@@ -86,6 +121,13 @@ class CurriculumStudyResponder(StudyResponder):
         return super()._handle(text, active=active)
 
     def _handle_active(self, session: dict[str, Any], normalized: str) -> str | None:
+        if normalized in _CORRECT_ALIASES:
+            normalized = "right"
+        elif normalized in _WRONG_ALIASES:
+            normalized = "wrong"
+        elif normalized in _SKIP_ALIASES:
+            normalized = "skip"
+
         rating = _RATINGS.get(normalized)
         if rating is not None:
             return self._grade_rating(session, rating)
