@@ -70,6 +70,33 @@ async def test_voice_study_commands_stay_local(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_mark_it_wrong_stays_local_and_advances_to_next_card(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    deck = store.create_deck("MCAT Biology")
+    first = store.create_card(deck["id"], question="First question?", answer="First answer.")
+    second = store.create_card(deck["id"], question="Second question?", answer="Second answer.")
+    session = store.start_session(deck["id"], mode="ordered")
+    assert int(session["card"]["id"]) == int(first["id"])
+
+    events: list[sm.Event] = []
+    delegate = Delegate()
+    responder = StudyResponder(store=store, delegate=delegate, emit=events.append)
+
+    await responder.send("mark it wrong")
+
+    assert delegate.sent == []
+    assert isinstance(events[0], sm.AgentSpeakable)
+    assert "wrong recorded" in events[0].text.casefold()
+    assert "second question" in events[0].text.casefold()
+
+    current = store.current_session()
+    assert current is not None
+    assert int(current["card"]["id"]) == int(second["id"])
+    assert current["progress"]["wrong"] == 1
+    assert current["progress"]["completed"] == 1
+
+
+@pytest.mark.asyncio
 async def test_non_study_text_is_forwarded(tmp_path: Path) -> None:
     store = _store(tmp_path)
     events: list[sm.Event] = []
