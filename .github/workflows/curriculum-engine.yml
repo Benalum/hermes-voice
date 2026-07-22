@@ -1,0 +1,129 @@
+name: Curriculum Engine
+
+on:
+  push:
+    branches:
+      - agent/curriculum-engine-v2
+  pull_request:
+    branches:
+      - agent/portable-study-sessions
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.30"
+          enable-cache: true
+
+      - name: Sync development environment
+        run: uv sync --dev
+
+      - name: Import Phase 1 content module
+        run: |
+          uv run python - <<'PY'
+          from hermes_voice.study.phase1_content import COURSES, PACK_KEY
+          print(PACK_KEY, len(COURSES))
+          assert len(COURSES) == 22
+          PY
+
+      - name: Install Phase 1 content into clean store
+        run: |
+          uv run python - <<'PY'
+          from tempfile import TemporaryDirectory
+          from pathlib import Path
+          from hermes_voice.study.curriculum import foundation_curriculum_skeleton
+          from hermes_voice.study.curriculum_store import CurriculumStore
+          from hermes_voice.study.phase1_content import install_phase1_content
+          from hermes_voice.study.store import StudyPaths, StudyStore
+
+          with TemporaryDirectory() as directory:
+              root = Path(directory) / "study"
+              paths = StudyPaths(root=root, database=root / "study.sqlite3", media=root / "media")
+              store = StudyStore(paths)
+              curriculum_store = CurriculumStore(paths)
+              curriculum_store.install_curriculum(foundation_curriculum_skeleton())
+              result = install_phase1_content(store, curriculum_store)
+              print(result)
+              assert result["courses"] == 22
+              assert result["total_cards"] == 660
+              assert result["bindings"] == 22
+          PY
+
+      - name: Phase 1 content pack test
+        run: uv run pytest -q tests/study/test_phase1_content.py
+
+      - name: Curriculum and Study compatibility tests
+        run: |
+          uv run pytest -q \
+            tests/study/test_curriculum.py \
+            tests/study/test_curriculum_store.py \
+            tests/study/test_curriculum_runtime.py \
+            tests/study/test_curriculum_api.py \
+            tests/study/test_curriculum_responder.py \
+            tests/study/test_store.py \
+            tests/study/test_responder.py \
+            tests/study/test_starter_packs.py \
+            tests/study/test_app.py
+
+      - name: Ruff runtime and tests
+        run: |
+          uv run ruff check \
+            hermes_voice/study/curriculum.py \
+            hermes_voice/study/curriculum_store.py \
+            hermes_voice/study/curriculum_runtime.py \
+            hermes_voice/study/curriculum_api.py \
+            hermes_voice/study/curriculum_responder.py \
+            hermes_voice/study/pack_api.py \
+            hermes_voice/study/install.py \
+            hermes_voice/server/study_app.py \
+            tests/study/test_curriculum.py \
+            tests/study/test_curriculum_store.py \
+            tests/study/test_curriculum_runtime.py \
+            tests/study/test_curriculum_api.py \
+            tests/study/test_curriculum_responder.py \
+            tests/study/test_phase1_content.py \
+            tests/study/test_app.py
+
+      - name: Ruff Phase 1 E rules
+        run: uv run ruff check --select E --ignore E501 hermes_voice/study/phase1_content.py
+
+      - name: Ruff Phase 1 F rules
+        run: |
+          uv run ruff check --select F --ignore F541,F811,F841 \
+            hermes_voice/study/phase1_content.py
+
+      - name: Ruff Phase 1 import rules
+        run: uv run ruff check --select I hermes_voice/study/phase1_content.py
+
+      - name: Ruff Phase 1 upgrade rules
+        run: uv run ruff check --select UP hermes_voice/study/phase1_content.py
+
+      - name: Ruff Phase 1 bugbear and simplification rules
+        run: |
+          uv run ruff check --select B,SIM,RUF --ignore B007 \
+            hermes_voice/study/phase1_content.py
+
+      - name: MyPy
+        run: |
+          uv run mypy --no-incremental \
+            hermes_voice/study/curriculum.py \
+            hermes_voice/study/curriculum_store.py \
+            hermes_voice/study/curriculum_runtime.py \
+            hermes_voice/study/curriculum_api.py \
+            hermes_voice/study/curriculum_responder.py
+
+      - name: Browser syntax
+        run: node --check hermes_voice/web/curriculum.mjs
+
+      - name: Complete model-free suite
+        run: uv run pytest -q

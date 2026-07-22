@@ -1,0 +1,15 @@
+.curriculum-panel { margin-bottom: 1.25rem; }
+.curriculum-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.curriculum-courses { display: grid; gap: .65rem; margin-top: 1rem; }
+.curriculum-course { border: 1px solid var(--border, #d8dde6); border-radius: .75rem; overflow: hidden; }
+.curriculum-course > summary { cursor: pointer; display: flex; justify-content: space-between; gap: 1rem; padding: .8rem 1rem; font-weight: 700; }
+.curriculum-lessons { display: grid; gap: .5rem; padding: 0 .75rem .75rem; }
+.curriculum-lesson { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: .75rem; border-radius: .65rem; background: color-mix(in srgb, Canvas 94%, CanvasText 6%); }
+.curriculum-lesson p { margin: .2rem 0 0; }
+.curriculum-lesson.locked { opacity: .62; }
+.curriculum-lesson.locked button { cursor: not-allowed; }
+.grade-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 800px) {
+  .curriculum-heading, .curriculum-lesson { align-items: stretch; flex-direction: column; }
+  .grade-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

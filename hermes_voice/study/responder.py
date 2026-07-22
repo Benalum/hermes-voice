@@ -206,6 +206,10 @@ class StudyResponder:
             "i got it right",
             "that was correct",
             "mark correct",
+            "mark it correct",
+            "mark that correct",
+            "mark this correct",
+            "mark it right",
         }:
             return self._grade(session_id, "correct")
         if normalized in {
@@ -214,9 +218,22 @@ class StudyResponder:
             "i got it wrong",
             "that was wrong",
             "mark wrong",
+            "mark it wrong",
+            "mark that wrong",
+            "mark this wrong",
+            "mark it incorrect",
         }:
             return self._grade(session_id, "wrong")
-        if normalized in {"skip", "skipped", "skip card", "next card"}:
+        if normalized in {
+            "skip",
+            "skipped",
+            "skip card",
+            "skip it",
+            "skip this card",
+            "mark skipped",
+            "mark it skipped",
+            "next card",
+        }:
             return self._grade(session_id, "skipped")
         if normalized in {
             "repeat",

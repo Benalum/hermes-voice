@@ -31,6 +31,10 @@ rollback() {
     echo "Deployment failed; restoring the previous Hermes Voice state." >&2
     cd "$REPO"
     git switch --detach "$OLD_HEAD" || true
+    if [[ -f "$BACKUP/study-before.tgz" ]]; then
+      rm -rf /var/lib/hermes-voice/study
+      tar -C /var/lib/hermes-voice -xzf "$BACKUP/study-before.tgz"
+    fi
     rm -rf "$DROPIN_DIR"
     if [[ -d "$BACKUP/hermes-voice.service.d" ]]; then
       cp -a "$BACKUP/hermes-voice.service.d" "$DROPIN_DIR"
@@ -66,9 +70,6 @@ if [[ -d /var/lib/hermes-voice/study ]]; then
   tar -C /var/lib/hermes-voice -czf "$BACKUP/study-before.tgz" study
 fi
 
-# Fetch the requested branch only into FETCH_HEAD. Do not update or prune a
-# remote-tracking ref here: a stale or damaged refs/remotes/origin/... entry
-# must not prevent an otherwise valid deployment.
 git fetch --no-tags origin "refs/heads/$BRANCH"
 git switch -C deploy/study FETCH_HEAD
 NEW_HEAD="$(git rev-parse HEAD)"
@@ -102,23 +103,20 @@ done
 curl -fsS http://127.0.0.1:8990/healthz
 printf '\n'
 
-# Do not pipe curl directly into grep while pipefail is enabled. grep -q can
-# close the pipe after finding an early match, which makes curl exit with a
-# broken-pipe status and falsely triggers rollback.
 curl -fsS http://127.0.0.1:8990/study \
   --output /tmp/hermes-study-page.html
 grep -q 'Hermes Study' /tmp/hermes-study-page.html
 
 curl -fsS -X POST \
-  http://127.0.0.1:8990/api/study/starter-packs/mcat-foundations \
-  >/tmp/hermes-mcat-pack.json
+  http://127.0.0.1:8990/api/study/content-packs/mcat-phase-1-v1 \
+  >/tmp/hermes-phase1-pack.json
 
 "$REPO/.venv/bin/python" - <<'PY'
 import json
 from pathlib import Path
 from urllib.request import urlopen
 
-expected = {
+legacy = {
     'MCAT Biology: Cells, Genetics & Organ Systems',
     'MCAT Biochemistry: Amino Acids, Enzymes & Metabolism',
     'MCAT General & Organic Chemistry',
@@ -126,17 +124,37 @@ expected = {
     'MCAT Psychology & Sociology',
     'MCAT CARS: Passage Reasoning',
 }
-pack = json.loads(Path('/tmp/hermes-mcat-pack.json').read_text())
-decks = json.load(urlopen('http://127.0.0.1:8990/api/study/decks'))['decks']
-mcat = [deck for deck in decks if deck['name'] in expected]
-assert {deck['name'] for deck in mcat} == expected, mcat
-assert sum(int(deck['card_count']) for deck in mcat) >= 30, mcat
-assert pack['media']['missing'] == 0, pack
+base = 'http://127.0.0.1:8990'
+pack = json.loads(Path('/tmp/hermes-phase1-pack.json').read_text())
+decks = json.load(urlopen(f'{base}/api/study/decks'))['decks']
+progress = json.load(urlopen(
+    f'{base}/api/study/curricula/mcat-medical-foundations-phase-1/progress'
+))['progress']
+result = pack['result']
+
+assert len(decks) == 22, len(decks)
+assert not ({deck['name'] for deck in decks} & legacy), decks
+assert sum(int(deck['card_count']) for deck in decks) == 660, decks
+assert min(int(deck['card_count']) for deck in decks) >= 30, decks
+assert result['courses'] == 22, result
+assert result['bindings'] == 22, result
+assert result['total_cards'] == 660, result
+assert result['media_attached'] + result['media_skipped'] == 44, result
+assert len(progress['courses']) == 22, progress
+assert sum(
+    int(deck['bound'])
+    for course in progress['courses']
+    for deck in course['decks']
+) == 22, progress
+assert progress['next_deck'] is not None, progress
+
 print(json.dumps({
-    'pack_result': pack['result'],
-    'media_result': pack['media'],
-    'mcat_decks': len(mcat),
-    'mcat_cards': sum(int(deck['card_count']) for deck in mcat),
+    'pack_result': result,
+    'phase1_decks': len(decks),
+    'phase1_cards': sum(int(deck['card_count']) for deck in decks),
+    'phase1_visuals': result['media_attached'] + result['media_skipped'],
+    'curriculum_bindings': result['bindings'],
+    'next_deck': progress['next_deck'],
 }, indent=2))
 PY
 

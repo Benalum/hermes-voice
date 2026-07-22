@@ -16,8 +16,10 @@ from hermes_voice.server import app as voice_app_module
 from hermes_voice.server.app import create_app as create_voice_app
 from hermes_voice.server.immediate_barge import ImmediateBargeInOrchestrator
 from hermes_voice.server.orchestrator import ParrotResponder
+from hermes_voice.study.curriculum import foundation_curriculum_skeleton
+from hermes_voice.study.curriculum_responder import CurriculumStudyResponder
+from hermes_voice.study.curriculum_store import CurriculumStore
 from hermes_voice.study.install import install_study, wrap_responder_factory
-from hermes_voice.study.responder import StudyResponder
 from hermes_voice.study.store import StudyStore
 
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -29,6 +31,8 @@ def _wrap_telegram_relay(store: StudyStore) -> None:
 
     current = telegram_telethon.TelegramRelay
     original = getattr(current, "_hermes_study_original", current)
+    curriculum_store = CurriculumStore(store.paths)
+    curriculum_store.install_curriculum(foundation_curriculum_skeleton())
 
     class StudyTelegramRelay:
         _hermes_study_original = original
@@ -38,12 +42,9 @@ def _wrap_telegram_relay(store: StudyStore) -> None:
             if not callable(emit):
                 raise TypeError("TelegramRelay requires an emit callback")
             delegate = original(*args, **kwargs)
-            # Study context is resolved synchronously for each user turn. Do not
-            # inject background speech events: out-of-band AgentSpeakable and
-            # TurnSettled events can race the orchestrator's speaking/barge-in
-            # state and prevent reliable interruption of agent audio.
-            self._study = StudyResponder(
+            self._study = CurriculumStudyResponder(
                 store=store,
+                curriculum_store=curriculum_store,
                 delegate=delegate,
                 emit=emit,
             )
