@@ -24,10 +24,6 @@ jobs:
             os: macos-15
             backend: mlx
             speech_extra: speech
-          - name: macOS 15 Intel
-            os: macos-15-intel
-            backend: portable
-            speech_extra: speech
           - name: Windows Server 2025 x64
             os: windows-2025
             backend: portable
