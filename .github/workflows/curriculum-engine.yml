@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - agent/portable-study-sessions
+      - agent/curriculum-engine-v2
 
 permissions:
   contents: read
@@ -72,6 +73,7 @@ jobs:
             tests/study/test_curriculum_responder.py \
             tests/study/test_store.py \
             tests/study/test_responder.py \
+            tests/study/test_ai_auto_advance.py \
             tests/study/test_starter_packs.py \
             tests/study/test_app.py
 
@@ -83,6 +85,7 @@ jobs:
             hermes_voice/study/curriculum_runtime.py \
             hermes_voice/study/curriculum_api.py \
             hermes_voice/study/curriculum_responder.py \
+            hermes_voice/study/responder.py \
             hermes_voice/study/pack_api.py \
             hermes_voice/study/install.py \
             hermes_voice/server/study_app.py \
@@ -91,6 +94,7 @@ jobs:
             tests/study/test_curriculum_runtime.py \
             tests/study/test_curriculum_api.py \
             tests/study/test_curriculum_responder.py \
+            tests/study/test_ai_auto_advance.py \
             tests/study/test_phase1_content.py \
             tests/study/test_app.py
 
@@ -120,7 +124,8 @@ jobs:
             hermes_voice/study/curriculum_store.py \
             hermes_voice/study/curriculum_runtime.py \
             hermes_voice/study/curriculum_api.py \
-            hermes_voice/study/curriculum_responder.py
+            hermes_voice/study/curriculum_responder.py \
+            hermes_voice/study/responder.py
 
       - name: Browser syntax
         run: node --check hermes_voice/web/curriculum.mjs
