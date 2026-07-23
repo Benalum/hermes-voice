@@ -19,6 +19,7 @@ jobs:
           enable-cache: true
       - run: uv sync --dev
       - name: Apply Ruff fixes
+        continue-on-error: true
         run: |
           uv run ruff check --fix \
             hermes_voice/study/responder.py \
