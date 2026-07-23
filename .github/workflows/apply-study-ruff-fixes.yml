@@ -1,0 +1,53 @@
+name: Apply Study Ruff fixes
+
+on:
+  push:
+    branches:
+      - fix/study-ai-auto-advance
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/study-ai-auto-advance
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.30"
+          enable-cache: true
+      - run: uv sync --dev
+      - name: Apply Ruff fixes
+        run: |
+          uv run ruff check --fix \
+            hermes_voice/study/responder.py \
+            hermes_voice/study/curriculum_responder.py \
+            hermes_voice/study/install.py \
+            hermes_voice/server/study_app.py \
+            tests/study/test_ai_auto_advance.py
+          uv run ruff format \
+            hermes_voice/study/responder.py \
+            hermes_voice/study/curriculum_responder.py \
+            hermes_voice/study/install.py \
+            hermes_voice/server/study_app.py \
+            tests/study/test_ai_auto_advance.py
+      - name: Commit fixes
+        run: |
+          if git diff --quiet; then
+            echo "No Ruff changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            hermes_voice/study/responder.py \
+            hermes_voice/study/curriculum_responder.py \
+            hermes_voice/study/install.py \
+            hermes_voice/server/study_app.py \
+            tests/study/test_ai_auto_advance.py
+          git commit -m "style: apply Ruff fixes to Study auto-advance"
+          git push origin HEAD:fix/study-ai-auto-advance
