@@ -46,12 +46,24 @@ def wrap_responder_factory(
     curriculum_store.install_curriculum(foundation_curriculum_skeleton())
 
     def make(emit: Callable[[sm.Event], None]) -> ResponderPort:
-        return CurriculumStudyResponder(
+        holder: dict[str, CurriculumStudyResponder] = {}
+
+        def bridge_emit(event: sm.Event) -> None:
+            responder = holder.get("responder")
+            if responder is None:
+                emit(event)
+                return
+            responder.handle_delegate_event(event)
+
+        delegate = make_responder(bridge_emit)
+        responder = CurriculumStudyResponder(
             store=store,
             curriculum_store=curriculum_store,
-            delegate=make_responder(emit),
+            delegate=delegate,
             emit=emit,
             watch_sessions=True,
         )
+        holder["responder"] = responder
+        return responder
 
     return make
