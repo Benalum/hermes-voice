@@ -85,7 +85,6 @@ jobs:
             hermes_voice/study/curriculum_runtime.py \
             hermes_voice/study/curriculum_api.py \
             hermes_voice/study/curriculum_responder.py \
-            hermes_voice/study/responder.py \
             hermes_voice/study/pack_api.py \
             hermes_voice/study/install.py \
             hermes_voice/server/study_app.py \
@@ -124,8 +123,7 @@ jobs:
             hermes_voice/study/curriculum_store.py \
             hermes_voice/study/curriculum_runtime.py \
             hermes_voice/study/curriculum_api.py \
-            hermes_voice/study/curriculum_responder.py \
-            hermes_voice/study/responder.py
+            hermes_voice/study/curriculum_responder.py
 
       - name: Browser syntax
         run: node --check hermes_voice/web/curriculum.mjs
