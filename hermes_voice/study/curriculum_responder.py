@@ -9,7 +9,7 @@ from hermes_voice.kit import session as sm
 from hermes_voice.kit.ports import ResponderPort
 from hermes_voice.study.curriculum_runtime import CurriculumRuntime
 from hermes_voice.study.curriculum_store import CurriculumStore
-from hermes_voice.study.responder import StudyResponder, _normalize
+from hermes_voice.study.responder import StudyAction, StudyResponder, _normalize
 from hermes_voice.study.store import StudyConflictError, StudyStore
 
 _FOUNDATIONS = "mcat-medical-foundations-phase-1"
@@ -133,14 +133,23 @@ class CurriculumStudyResponder(StudyResponder):
             return self._grade_rating(session, rating)
         return super()._handle_active(session, normalized)
 
+    def _apply_agent_action(self, action: StudyAction) -> str | None:
+        if action.startswith("grade_"):
+            session = self._store.current_session()
+            if session is None or session.get("card") is None:
+                return "The study session is no longer active."
+            rating = action.removeprefix("grade_")
+            if rating not in {"again", "hard", "good", "easy"}:
+                raise ValueError(f"unsupported curriculum rating: {rating}")
+            return self._grade_rating(session, rating)
+        return super()._apply_agent_action(action)
+
     def _grade_rating(self, session: dict[str, Any], rating: str) -> str:
         card = session.get("card")
         if card is None:
             return "This study session is finished."
         state = self._curriculum_store.record_review(int(card["id"]), rating)  # type: ignore[arg-type]
-        outcome: Literal["correct", "wrong"] = (
-            "wrong" if rating == "again" else "correct"
-        )
+        outcome: Literal["correct", "wrong"] = "wrong" if rating == "again" else "correct"
         updated = self._store.grade(str(session["id"]), outcome)
         label = rating.capitalize()
         schedule = ""
@@ -155,9 +164,7 @@ class CurriculumStudyResponder(StudyResponder):
     def _curriculum_progress(self) -> str:
         progress = self._runtime.progress(_FOUNDATIONS)
         completed = sum(
-            bool(deck["completed"])
-            for course in progress["courses"]
-            for deck in course["decks"]
+            bool(deck["completed"]) for course in progress["courses"] for deck in course["decks"]
         )
         total = sum(len(course["decks"]) for course in progress["courses"])
         next_deck = progress["next_deck"]
