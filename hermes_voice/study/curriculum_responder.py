@@ -164,9 +164,7 @@ class CurriculumStudyResponder(StudyResponder):
     def _curriculum_progress(self) -> str:
         progress = self._runtime.progress(_FOUNDATIONS)
         completed = sum(
-            bool(deck["completed"])
-            for course in progress["courses"]
-            for deck in course["decks"]
+            bool(deck["completed"]) for course in progress["courses"] for deck in course["decks"]
         )
         total = sum(len(course["decks"]) for course in progress["courses"])
         next_deck = progress["next_deck"]

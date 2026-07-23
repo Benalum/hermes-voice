@@ -100,10 +100,7 @@ async def test_explanation_repeats_card_then_natural_answer_advances(tmp_path: P
     await responder.send("Answer 1.")
     responder.handle_delegate_event(
         sm.AgentSpeakable(
-            text=(
-                "Correct. That matches the expected answer.\n"
-                "[[HERMES_STUDY_ACTION:grade_good]]"
-            ),
+            text=("Correct. That matches the expected answer.\n[[HERMES_STUDY_ACTION:grade_good]]"),
             message_id=11,
         )
     )
