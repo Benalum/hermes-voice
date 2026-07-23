@@ -1,0 +1,34 @@
+name: Ruff responder diagnostic
+
+on:
+  pull_request:
+    branches:
+      - agent/curriculum-engine-v2
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.30"
+          enable-cache: true
+      - run: uv sync --dev
+      - name: Capture Ruff diagnostics
+        shell: bash
+        run: |
+          set +e
+          uv run ruff check hermes_voice/study/responder.py \
+            --output-format=concise > ruff-responder.txt 2>&1
+          status=$?
+          cat ruff-responder.txt
+          echo "exit_status=$status" >> ruff-responder.txt
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ruff-responder-diagnostic
+          path: ruff-responder.txt
