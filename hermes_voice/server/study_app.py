@@ -41,13 +41,27 @@ def _wrap_telegram_relay(store: StudyStore) -> None:
             emit = kwargs.get("emit")
             if not callable(emit):
                 raise TypeError("TelegramRelay requires an emit callback")
-            delegate = original(*args, **kwargs)
-            self._study = CurriculumStudyResponder(
+
+            holder: dict[str, CurriculumStudyResponder] = {}
+
+            def bridge_emit(event: sm.Event) -> None:
+                responder = holder.get("responder")
+                if responder is None:
+                    emit(event)
+                    return
+                responder.handle_delegate_event(event)
+
+            delegate_kwargs = dict(kwargs)
+            delegate_kwargs["emit"] = bridge_emit
+            delegate = original(*args, **delegate_kwargs)
+            responder = CurriculumStudyResponder(
                 store=store,
                 curriculum_store=curriculum_store,
                 delegate=delegate,
                 emit=emit,
             )
+            holder["responder"] = responder
+            self._study = responder
 
         async def send(self, text: str) -> None:
             await self._study.send(text)
