@@ -40,9 +40,10 @@ for who in ['asset','lev','dealer']:
 cot['lev_pctile_full']=cot.lev_net_pct_oi.rank(pct=True,method='average')
 cot['signal']=(cot.asset_net>0)&(cot.lev_net<0)
 
-# Official Fed H.10 EUR/USD, via FRED. Report is as-of Tuesday and normally published Friday.
-# We use first available observation on/after the following Monday (Tuesday + 6 days),
-# preventing a look-ahead entry before the report was public.
+# Official Fed H.10 EUR/USD, via FRED. COT normally publishes Friday for Tuesday positions,
+# but holidays can delay release by 1-2 days. Use Wednesday of the following week
+# (Tuesday + 8 calendar days) as a conservative release-safe entry date.
+# Exclude the abnormal 2025 federal-shutdown catch-up block from outcome statistics.
 fred='https://fred.stlouisfed.org/graph/fredgraph.csv?id=DEXUSEU&cosd=2006-01-01&coed=2026-08-13'
 rr=requests.get(fred,timeout=90); rr.raise_for_status()
 fx=pd.read_csv(io.StringIO(rr.text)); fx.columns=['date','eurusd']; fx.date=pd.to_datetime(fx.date); fx.eurusd=pd.to_numeric(fx.eurusd,errors='coerce'); fx=fx.dropna().sort_values('date').reset_index(drop=True)
@@ -53,15 +54,19 @@ def px_on_after(d,maxdays=5):
     if dt>pd.Timestamp(d)+pd.Timedelta(days=maxdays): return pd.NaT,np.nan
     return dt,float(fx.iloc[i].eurusd)
 
+shutdown_start=pd.Timestamp('2025-09-30')
+shutdown_end=pd.Timestamp('2026-01-13')
 out=[]
 for _,q in cot.iterrows():
-    ed,ep=px_on_after(q.report_date+pd.Timedelta(days=6))
-    z=q.to_dict(); z.update(entry_date=ed,entry_px=ep)
+    ed,ep=px_on_after(q.report_date+pd.Timedelta(days=8))
+    valid_release=not (shutdown_start <= q.report_date <= shutdown_end)
+    z=q.to_dict(); z.update(entry_date=ed,entry_px=ep,valid_release=valid_release)
     for h in HORIZONS:
         dd,pp=px_on_after(ed+pd.Timedelta(days=7*h)) if pd.notna(ed) else (pd.NaT,np.nan)
         z[f'ret_{h}w']=pp/ep-1 if np.isfinite(ep) and np.isfinite(pp) else np.nan
     out.append(z)
 bt=pd.DataFrame(out)
+bt=bt[bt.valid_release].copy()
 
 def wilson(k,n,z=1.959963984540054):
     if not n:return np.nan,np.nan
@@ -101,6 +106,7 @@ dealer_summary=summary(bt[(bt.asset_net>0)&(bt.lev_net<0)&(bt.dealer_net<0)])
 current=cot[cot.report_date<=TODAY].iloc[-1]
 # Nearest positioning analogues use net position / OI for scale invariance.
 hist=cot[cot.report_date<current.report_date-pd.Timedelta(days=180)].copy(); cols=['asset_net_pct_oi','lev_net_pct_oi','dealer_net_pct_oi']
+hist=hist[~hist.report_date.between(shutdown_start,shutdown_end)].copy()
 hist[cols]=hist[cols].astype(float)
 mu=hist[cols].mean(); sd=hist[cols].std(ddof=0).replace(0,np.nan)
 cz=current[cols].astype(float).to_numpy(dtype=float); muz=mu.to_numpy(dtype=float); sdz=sd.to_numpy(dtype=float)
@@ -120,8 +126,8 @@ def pct(df):
         if c in y:y[c]*=100
     return y
 pd.set_option('display.width',240); pd.set_option('display.max_columns',30); pd.set_option('display.float_format',lambda x:f'{x:.3f}')
-print('DATA',len(cot),cot.report_date.min().date(),cot.report_date.max().date(),'FX',len(fx),fx.date.min().date(),fx.date.max().date())
-print('SIGNAL_WEEKS',int(cot.signal.sum()),'EPISODES',len(episodes))
+print('DATA',len(cot),cot.report_date.min().date(),cot.report_date.max().date(),'BT_VALID_ROWS',len(bt),'FX',len(fx),fx.date.min().date(),fx.date.max().date())
+print('SIGNAL_WEEKS_VALID',len(sig),'EPISODES',len(episodes))
 print('\nMAIN_PCT\n'+pct(main).to_string(index=False))
 print('\nEXTREME_PCT\n'+pct(extreme).to_string(index=False))
 print('\nEPISODES_PCT\n'+pct(episode_summary).to_string(index=False))
@@ -132,7 +138,7 @@ print('\nANALOG_SUMMARY_PCT\n'+pct(analog_summary).to_string(index=False))
 print('\nSIMILAR_N',len(similar),'CURRENT_LEV_PERCENTILE',curpct)
 print(pct(similar_summary).to_string(index=False))
 
-payload={'range':[str(cot.report_date.min().date()),str(cot.report_date.max().date())],'signal_weeks':int(cot.signal.sum()),'episodes':int(len(episodes)),
+payload={'range':[str(cot.report_date.min().date()),str(cot.report_date.max().date())],'signal_weeks_valid':int(len(sig)),'episodes':int(len(episodes)),
          'main':main.replace({np.nan:None}).to_dict('records'),'extreme':extreme.replace({np.nan:None}).to_dict('records'),'episode_summary':episode_summary.replace({np.nan:None}).to_dict('records'),
          'dealer_summary':dealer_summary.replace({np.nan:None}).to_dict('records'),'analog_summary':analog_summary.replace({np.nan:None}).to_dict('records'),'similar_n':int(len(similar)),'similar_summary':similar_summary.replace({np.nan:None}).to_dict('records'),
          'current':{'report_date':str(current.report_date.date()),'oi':float(current.oi),'asset_net':float(current.asset_net),'lev_net':float(current.lev_net),'dealer_net':float(current.dealer_net),'asset_net_pct_oi':float(current.asset_net_pct_oi),'lev_net_pct_oi':float(current.lev_net_pct_oi),'dealer_net_pct_oi':float(current.dealer_net_pct_oi),'lev_pctile_full':float(current.lev_pctile_full)}}
