@@ -101,8 +101,12 @@ dealer_summary=summary(bt[(bt.asset_net>0)&(bt.lev_net<0)&(bt.dealer_net<0)])
 current=cot[cot.report_date<=TODAY].iloc[-1]
 # Nearest positioning analogues use net position / OI for scale invariance.
 hist=cot[cot.report_date<current.report_date-pd.Timedelta(days=180)].copy(); cols=['asset_net_pct_oi','lev_net_pct_oi','dealer_net_pct_oi']
-mu=hist[cols].mean(); sd=hist[cols].std(ddof=0); cz=(current[cols]-mu)/sd; zz=(hist[cols]-mu)/sd
-hist['distance']=np.sqrt(((zz-cz)**2).sum(axis=1))
+hist[cols]=hist[cols].astype(float)
+mu=hist[cols].mean(); sd=hist[cols].std(ddof=0).replace(0,np.nan)
+cz=current[cols].astype(float).to_numpy(dtype=float); muz=mu.to_numpy(dtype=float); sdz=sd.to_numpy(dtype=float)
+cur_z=(cz-muz)/sdz
+hist_z=(hist[cols].to_numpy(dtype=float)-muz)/sdz
+hist['distance']=np.sqrt(np.square(hist_z-cur_z).sum(axis=1))
 analog_dates=hist.nsmallest(20,'distance')[['report_date','distance']]
 analog=bt.merge(analog_dates,on='report_date',how='inner').sort_values('distance'); analog_summary=summary(analog)
 
