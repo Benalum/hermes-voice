@@ -15,4 +15,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install --disable-pip-version-check pandas numpy requests scikit-learn
-      - run: python tools/eurusd_crossasset_intraday_runfixed_temp.py
+      - run: python tools/eurusd_crossasset_model_runfixed_temp.py
