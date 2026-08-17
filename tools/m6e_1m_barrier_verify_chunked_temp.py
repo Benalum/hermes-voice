@@ -16,4 +16,11 @@ replacement='''def load(sym):
  return pd.concat(chunks,ignore_index=True).dropna(subset=['open','high','low','close']).sort_values('ts').drop_duplicates('ts')
 '''
 code=code[:a]+replacement+code[b:]
+# Use UTC epoch nanoseconds for path-search comparisons so tz-aware pandas timestamps
+# never meet tz-naive numpy datetime64 values.
+code=code.replace("Mreset=M.reset_index().sort_values('ts');mts=Mreset.ts.to_numpy();MH=Mreset.high.to_numpy();ML=Mreset.low.to_numpy();MC=Mreset.close.to_numpy();", "Mreset=M.reset_index().sort_values('ts');mts=Mreset.ts.astype('int64').to_numpy();MH=Mreset.high.to_numpy();ML=Mreset.low.to_numpy();MC=Mreset.close.to_numpy();")
+code=code.replace("np.searchsorted(mts,np.datetime64(entry_ts),'left')", "np.searchsorted(mts,pd.Timestamp(entry_ts).value,'left')")
+code=code.replace("end=np.datetime64(entry_ts+pd.Timedelta(minutes=minutes))", "end=pd.Timestamp(entry_ts+pd.Timedelta(minutes=minutes)).value")
+code=code.replace("np.searchsorted(mts,np.datetime64(r.ts),'left')", "np.searchsorted(mts,pd.Timestamp(r.ts).value,'left')")
+code=code.replace("end=np.datetime64(r.ts+pd.Timedelta(minutes=minutes))", "end=pd.Timestamp(r.ts+pd.Timedelta(minutes=minutes)).value")
 exec(compile(code,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
