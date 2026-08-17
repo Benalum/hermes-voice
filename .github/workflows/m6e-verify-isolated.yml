@@ -1,0 +1,18 @@
+name: Isolated M6E 75 verification
+on:
+  push:
+    branches:
+      - agent/m6e-75-verify-20260816
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check pandas numpy requests scikit-learn
+      - run: python tools/m6e_1m_barrier_verify_chunked_temp.py
