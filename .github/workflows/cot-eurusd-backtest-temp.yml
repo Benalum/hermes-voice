@@ -15,4 +15,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install --disable-pip-version-check pandas numpy requests scikit-learn
-      - run: python tools/eurusd_intraday_75_temp.py
+      - run: python tools/eurusd_ohlc_verify_temp.py
