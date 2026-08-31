@@ -1,0 +1,49 @@
+name: Russell MTF real-data backtest
+
+on:
+  push:
+    branches:
+      - agent/russell-mtf-real-backtest
+    paths:
+      - 'research/russell_mtf_real/**'
+      - '.github/workflows/russell-mtf-real-backtest.yml'
+  workflow_dispatch:
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip pandas numpy
+      - name: Download public M2K and RTY history
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p research/russell_mtf_real/data
+          base='https://raw.githubusercontent.com/axb0306/cme-futures-ohlc/main'
+          curl -fL --retry 3 "$base/M2K/M2K_tick_20260308_20260415.csv" -o research/russell_mtf_real/data/M2K_tick_20260308_20260415.csv
+          curl -fL --retry 3 "$base/M2K/M2K_1min_20260120_20260415.csv" -o research/russell_mtf_real/data/M2K_1min_20260120_20260415.csv
+          curl -fL --retry 3 "$base/RTY/RTY_tick_20260309_20260415.csv" -o research/russell_mtf_real/data/RTY_tick_20260309_20260415.csv
+          curl -fL --retry 3 "$base/RTY/RTY_1min_20260120_20260415.csv" -o research/russell_mtf_real/data/RTY_1min_20260120_20260415.csv
+          wc -l research/russell_mtf_real/data/*.csv
+      - name: Run cost-aware walk-forward backtest
+        run: |
+          mkdir -p research/russell_mtf_real/results
+          python research/russell_mtf_real/russell_real_backtest.py \
+            --data research/russell_mtf_real/data \
+            --out research/russell_mtf_real/results \
+            | tee research/russell_mtf_real/results.log
+      - name: Upload result bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: russell-mtf-real-results
+          path: |
+            research/russell_mtf_real/results
+            research/russell_mtf_real/results.log
+          if-no-files-found: error
+          retention-days: 30
