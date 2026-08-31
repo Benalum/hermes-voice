@@ -31,20 +31,16 @@ jobs:
           curl -fL --retry 3 "$base/RTY/RTY_tick_20260309_20260415.csv" -o research/russell_mtf_real/data/RTY_tick_20260309_20260415.csv
           curl -fL --retry 3 "$base/RTY/RTY_1min_20260120_20260415.csv" -o research/russell_mtf_real/data/RTY_1min_20260120_20260415.csv
           wc -l research/russell_mtf_real/data/*.csv
-      - name: Run cost-aware walk-forward backtest
+      - name: Run fixed-parameter baseline
         run: |
-          mkdir -p research/russell_mtf_real/results
           cd research/russell_mtf_real
-          python russell_fast_runner.py \
-            --data data \
-            --out results \
-            | tee results.log
+          python quick_baseline.py | tee quick_results.log
       - name: Upload result bundle
         uses: actions/upload-artifact@v4
         with:
-          name: russell-mtf-real-results
+          name: russell-mtf-fixed-baseline-results
           path: |
-            research/russell_mtf_real/results
-            research/russell_mtf_real/results.log
+            research/russell_mtf_real/quick_results
+            research/russell_mtf_real/quick_results.log
           if-no-files-found: error
           retention-days: 30
