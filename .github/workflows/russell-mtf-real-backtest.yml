@@ -34,10 +34,11 @@ jobs:
       - name: Run cost-aware walk-forward backtest
         run: |
           mkdir -p research/russell_mtf_real/results
-          python research/russell_mtf_real/russell_real_backtest.py \
-            --data research/russell_mtf_real/data \
-            --out research/russell_mtf_real/results \
-            | tee research/russell_mtf_real/results.log
+          cd research/russell_mtf_real
+          python russell_fast_runner.py \
+            --data data \
+            --out results \
+            | tee results.log
       - name: Upload result bundle
         uses: actions/upload-artifact@v4
         with:
