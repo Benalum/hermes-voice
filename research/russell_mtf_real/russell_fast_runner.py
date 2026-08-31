@@ -63,5 +63,7 @@ def run_engine_fast(f, contract, p, slippage_ticks, trade_start, trade_end=None)
         pending={"side":side,"signal_time":ts,"signal_i":i,"expires_i":i+p.expiry_bars,"day":day,"trigger":trigger,"stop":stop,"target":target}
     return pd.DataFrame(trades)
 
-rb.run_engine = run_engine_fast
-rb.main()
+
+if __name__ == "__main__":
+    rb.run_engine = run_engine_fast
+    rb.main()
